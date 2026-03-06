@@ -1,0 +1,3551 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Stajyer Değerlendirme Paneli</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    :root{
+      --bg1:#fff1f2; --bg2:#eff6ff; --bg3:#f5f3ff; --bg4:#ecfeff; --bg5:#ecfdf5;
+      --card: rgba(255,255,255,.84);
+      --border: rgba(15,23,42,.10);
+      --shadow: 0 22px 60px rgba(2,6,23,.12);
+      --accent1:#fb7185; --accent2:#60a5fa; --accent3:#a78bfa; --accent4:#34d399; --accent5:#22d3ee;
+    }
+    body{ background:
+      radial-gradient(1100px 620px at 10% 12%, var(--bg1), transparent 60%),
+      radial-gradient(1100px 620px at 90% 18%, var(--bg2), transparent 60%),
+      radial-gradient(900px 520px at 30% 92%, var(--bg3), transparent 60%),
+      radial-gradient(900px 520px at 80% 88%, var(--bg4), transparent 60%),
+      linear-gradient(#fff, #f8fafc); }
+    .ringPastel{ position:relative; }
+    .ringPastel:before{ content:''; position:absolute; inset:-1px; border-radius:1.5rem; padding:1px; background: linear-gradient(90deg,var(--accent2),var(--accent3),var(--accent4),var(--accent1)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events:none; opacity:.85; }
+    .glass{ background: var(--card); backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .chip{ border:1px solid var(--border); background: rgba(255,255,255,.72); }
+    .btn{ border:1px solid var(--border); background: rgba(255,255,255,.78); }
+    .btnPrimary{ background:#0f172a; color:white; border:1px solid rgba(15,23,42,.2); }
+    .btnPrimary:hover{ background:#111827; }
+    .btnDanger{ background:#e11d48; color:white; }
+    .btnDanger:hover{ background:#be123c; }
+    .overlay{ background: rgba(2,6,23,.45); }
+    .fadeIn{ animation: fadeIn .18s ease-out; }
+    @keyframes fadeIn{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
+    .scrollbar::-webkit-scrollbar{ width:10px; height:10px; }
+    .scrollbar::-webkit-scrollbar-thumb{ background: rgba(15,23,42,.20); border-radius:999px; }
+    .badge{ border:1px solid var(--border); background: rgba(255,255,255,.72); }
+    .hbtn{ padding:.55rem .9rem; border-radius:1rem; }
+    details > summary{ list-style: none; }
+    details > summary::-webkit-details-marker{ display:none; }
+
+	    /* Topbar should scroll away with the page (NOT fixed/sticky). */
+	    #topbar{ position:relative; top:auto; left:auto; right:auto; z-index:30; }
+
+  </style>
+
+<style>
+/* ---- Comments: scrollable container, cards show full content ---- */
+.comments-container{max-height:420px; overflow:auto;}
+.comment-card{display:flex; flex-direction:column; gap:8px;}
+.comment-note{white-space:pre-wrap; word-break:break-word;}
+</style>
+
+
+<style>
+/* history notes: show full text */
+.clamp2{
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+</style>
+
+</head>
+<body class="min-h-screen text-slate-800">
+<div id="app"></div>
+
+<script>
+
+async function sheetsUpdateRange(a1Range, values2d){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(a1Range)}?valueInputOption=USER_ENTERED`;
+  const body = { majorDimension: "ROWS", values: values2d };
+  return await gfetch(url, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+}
+
+function fmtMetaParts(parts){
+  const clean = (parts||[]).map(s=>String(s||"").trim()).filter(Boolean);
+  return clean.join(" • ");
+}
+
+async function sheetsUpdateRange(a1Range, values2d){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(a1Range)}?valueInputOption=USER_ENTERED`;
+  const body = { majorDimension: "ROWS", values: values2d };
+  return await gfetch(url, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+}
+
+function fmtMetaParts(parts){
+  const clean = (parts||[]).map(s=>String(s||"").trim()).filter(Boolean);
+  return clean.join(" • ");
+}
+
+function toast(msg){
+  try{
+    const el = document.createElement("div");
+    el.textContent = String(msg||"");
+    el.style.position="fixed"; el.style.right="16px"; el.style.bottom="16px";
+    el.style.padding="10px 12px"; el.style.borderRadius="12px";
+    el.style.background="rgba(17,24,39,.92)"; el.style.color="white";
+    el.style.fontSize="14px"; el.style.zIndex=9999;
+    document.body.appendChild(el);
+    setTimeout(()=>{ el.style.opacity="0"; el.style.transition="opacity .25s"; }, 1200);
+    setTimeout(()=>{ el.remove(); }, 1600);
+  }catch(e){ console.log(msg); }
+}
+
+/** =================== CONFIG =================== **/
+const GOOGLE_CLIENT_ID = "949607017035-5b9s500btkh3g3sle91dp76q2l7a9otv.apps.googleusercontent.com";
+const DRIVE_FOLDER_ID = "1Z9He2h9xch9DXilhWZbcKnRQltrGkBm-";
+const SCOPES = [
+"openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/spreadsheets"
+];
+const SCOPES_STR = SCOPES.join(" ");
+
+/** =================== GROQ CONFIG =================== **/
+const GROQ_API_KEY = ""; // Buraya kendi Groq API anahtarını gir: https://console.groq.com
+const GROQ_MODEL   = "llama-3.3-70b-versatile";
+
+/** Sheet structure (YOUR EXCEL) */
+const SHEETS = {
+  users: "Kullanicilar",
+  trainees: "Stajyerler",
+  evals: "Değerlendirmeler",
+  periods: "Dönemler",
+  groups: "Gruplar",
+  calendar: "Takvim",
+  apps: "Basvurular",
+  hr: "IseGiris",
+};
+
+function normKey(s){
+  return String(s||"")
+    .toLowerCase()
+    .normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+}
+
+function canonicalHeader(h){
+  const raw = String(h||"").trim();
+  const k = normKey(raw).replace(/\./g,"").replace(/-/g," ").trim();
+
+  const map = [
+    // Common IDs / identity
+    [/^(stajyer id|stajyerid|id)$/,"StajyerID"],
+    [/^(grup id|grupid|grupid|grup)$/,"GrupID"],
+    [/^(donem id|dönem id|donemid|dönemid|donem|dönem|period)$/,"DonemID"],
+    [/^(basvuru id|başvuru id|basvuruid|başvuruid|application id)$/,"BasvuruID"],
+    [/^(eval id|evalid|evaluation id)$/,"EvalID"],
+
+    // Names / contact
+    [/^(ad soyad|adsoyad|adi soyadi|adı soyadı|adısoyadı|adiso yadi|isim|name)$/,"AdSoyad"],
+    [/^(adi soyadi|adı soyadı|adısoyadı)$/,"AdSoyad"],
+    [/^(email|e mail|mail|mail adresi|mailadresi|e posta|eposta|e posta adresi|eposta adresi)$/,"Email"],
+    [/^(telefon|telefon numarası|telefonnumarası|phone)$/,"TelefonNumarası"],
+
+    // Roles / types
+    [/^(rol|role)$/,"Rol"],
+    [/^(degerlendiren|degerlendiren uzman|değerlendiren|değerlendiren uzman|uzman email|yorumcu email)$/,"DegerlendirenUzman"],
+    [/^(degerlendirme tipi|değerlendirme tipi|tip|type)$/,"DegerlendirmeTipi"],
+
+    // Dates / status
+    [/^(tarih|date)$/,"Tarih"],
+    [/^(katilim durumu|katilimdurumu|katılım durumu|katılımdurumu)$/,"KatilimDurumu"],
+    [/^(basvuru tarihi|başvuru tarihi|basvurutarihi)$/,"BasvuruTarihi"],
+
+    // Notes / scoring
+    [/^(genel notlar|genel not|notlar|not|yorum|aciklama|açıklama)$/,"GenelNotlar"],
+    [/^(kriter1 puan|kriter 1 puan|verim)$/,"Kriter1_Puan"],
+    [/^(kriter2 puan|kriter 2 puan|ilgi)$/,"Kriter2_Puan"],
+    [/^(kriter3 puan|kriter 3 puan|egitmen|eğitmen)$/,"Kriter3_Puan"],
+// Review calendar permissions (Takvim tablosu)
+    [/^(yorum izinli roller|yorumizinliroller|yorum izinli rol(ler)?|yorumizinlirol(ler)?|yorum grubu|yorumgrubu|yorum grup(lar)?|yorumgrup(lar)?|is grubu|isgrubu|iş grubu|izinli roller|izinliroller|izinli rol(ler)?|izinlirol(ler)?|allowed roles)$/,"YorumIzinliRoller"],
+    [/^(yorum izinli gruplar|yorumizinligruplar|izinli gruplar|izinligruplar|yorum grup id(ler)?|yorumgrupid(ler)?|yorum gruplar|yorumgruplar|group ids|allowed groups)$/,"YorumIzinliGruplar"],
+    [/^(yorum izni|yorumizin|yorum izin|izinli mi|yorum izinli mi)$/,"YorumIzin"],
+
+    // Group ownership
+    [/^(sorumlu uzman|sorumluuzman|uzman)$/,"SorumluUzman"],
+
+    // AI score
+    [/^(ai puan|aipuan|ai_puan|yapay zeka puan|yapay zekapuan|yapay zeka puani|ai score)$/,"AI_Puan"],
+  ];
+  for(const [re,canon] of map){ if(re.test(k)) return canon; }
+  return raw;
+}
+
+
+function resolveSheetName(preferred, fallbacks=[]){
+  const keys = Object.keys(state.tables||{});
+  const want = [preferred, ...fallbacks].map(normKey);
+  for(const k of keys){
+    const nk = normKey(k);
+    if(want.includes(nk)) return k;
+  }
+  for(const k of keys){
+    const nk = normKey(k);
+    if(want.some(w=> nk.includes(w))) return k;
+  }
+  return preferred;
+}
+
+
+/** =================== STATE =================== **/
+const state = {
+  reviewSelectedTid: null,
+  token: localStorage.getItem("access_token") || null,
+  user: null,
+  spreadsheetId: null,
+  datasetName: null,
+
+  role: null,           // from Kullanicilar.Rol
+  displayName: null,    // from Kullanicilar.AdSoyad
+  canSeeDashboard: false, // Admin/Supervisor only
+  canSeeAllReviews: false, // Admin/Supervisor/Proje Uzmanı => tüm stajyerleri görebilir/yorum yapabilir
+  canSeeHR: false,         // IK rolü => İşe Giriş ekranı
+
+  canManageHR: false,     // IK/SUPERVISOR/ADMIN => işe giriş durumu ekleyebilir
+  driveFiles: [], driveLoaded:false,
+  q: "",
+  loading:false,
+  toast:null,
+
+  tables:{},            // {sheet:{values, rows}}
+  route: location.hash || "#select",
+
+  activeDonemId: null,  // from Dönemler.DonemID
+  activeDonemIds: [],  // multi-select period ids
+  donemTouched: false,
+  activeGrupId: null,   // optional
+
+  modal:null,           // {type, tid}
+  reviewDateRaw: (localStorage.getItem("review_date_raw") || localStorage.getItem("review_date") || ""),
+
+  reviewDate: (localStorage.getItem("review_date") || ""),      // selected review date (YYYY-MM-DD)
+
+  reviewSaving:false,   // review modal is saving -> lock UI to prevent duplicates
+  // (Embedded keys are intentionally NOT auto-used to avoid shared quota / rate-limit issues.)
+evalsPadA: null,     // Değerlendirmeler sheet: A1 boşsa yazarken 1 hücre pad (A sütunu boş)
+};
+let _qDebounce = null;
+
+
+function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstChild; }
+function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
+
+
+function trimValuesToHeader(values){
+  values = values || [[]];
+  const headerRow = (values[0]||[]);
+  let start = 0;
+  while(start < headerRow.length && !String(headerRow[start]||"").trim()) start++;
+  let end = headerRow.length - 1;
+  while(end >= 0 && !String(headerRow[end]||"").trim()) end--;
+  if(start >= headerRow.length) start = 0;
+  if(end < start) end = headerRow.length - 1;
+
+  const width = Math.max(0, end - start + 1);
+  const sliced = values.map(r=>{
+    r = r || [];
+    const seg = r.slice(start, end+1);
+    while(seg.length < width) seg.push("");
+    return seg;
+  });
+  return { sliced, start, end, width };
+}
+
+function trimValuesToKnown(values, kind=""){
+  values = values || [[]];
+  const headerRow = (values[0]||[]);
+  const span = detectHeaderSpan(headerRow, kind);
+  const start = Number(span.start||0);
+  const end = Number(span.end||Math.max(0,(headerRow||[]).length-1));
+  const width = Math.max(0, end - start + 1);
+  const sliced = (values||[[]]).map(r=>{
+    r = r || [];
+    while(r.length < end+1) r.push("");
+    const seg = r.slice(start, end+1);
+    while(seg.length < width) seg.push("");
+    return seg;
+  });
+  return { sliced, start, end, width };
+}
+
+function detectHeaderSpan(headerRow, kind=""){
+  headerRow = headerRow || [];
+  const hr = headerRow.map(h=>String(h||"").trim());
+
+  const KNOWN = {
+    users: ["Email","Rol","AdSoyad"],
+    trainees: ["StajyerID","GrupID","AdıSoyadı","MailAdresi","TelefonNumarası","DoğumTarihi","İngilizceSeviyesi","EgitimDurumu","İkametgahŞehri","LinkedInProfili","CVLinki","ProfilFotoğrafıLinki","Durum","ProjeKonusu","HostelAdi","BasvuruAlani","TanitimVideosuLinki"],
+    periods: ["DonemID","DonemAdi","BaslangicTarihi","BitisTarihi","Aciklama"],
+    groups: ["GrupID","DonemID","GrupAdi","GrupTipi","SorumluUzman"],
+    // Takvim: include permissions column used by review date gating
+    // (Older trims were cutting this column away, making the app think it doesn't exist)
+    calendar: ["Tarih","DonemID","GunNo","GunTuru","Aciklama","YorumIzinliRoller"],
+    apps: ["BasvuruID","MailAdresi","AdıSoyadı","BaşvurduğuPozisyon","CVLinki","BasvuruTarihi","FormYanitID"],
+    evals: ["StajyerID","DegerlendirenUzman","DegerlendirmeTipi","Tarih","KatilimDurumu","Kriter1_Baslik","Kriter1_Puan","Kriter2_Baslik","Kriter2_Puan","Kriter3_Baslik","Kriter3_Puan","GenelNotlar","EvalID","TarihKey","DonemID","AI_Puan"],
+hr: ["Tarih","DonemID","StajyerID","AdıSoyadı","Departman","IseGirisDurumu","EkleyenEmail","EkleyenAd","Rol"],
+  };
+  const ANCHOR = {
+    users: "Email",
+    trainees: "StajyerID",
+    periods: "DonemID",
+    groups: "GrupID",
+    calendar: "Tarih",
+    apps: "BasvuruID",
+    evals: "StajyerID",
+hr: "StajyerID",
+  };
+
+  const known = KNOWN[kind] || [];
+  const knownCanon = new Set(known.map(h=>canonicalHeader(h)));
+  const target = canonicalHeader(ANCHOR[kind] || known[0] || "");
+
+  const candidates = [];
+  for(let i=0;i<hr.length;i++){
+    if(target && canonicalHeader(hr[i])===target) candidates.push(i);
+  }
+
+  // Fallback: first/last non-empty
+  if(!candidates.length){
+    let start=0;
+    while(start<hr.length && !hr[start]) start++;
+    let end=hr.length-1;
+    while(end>=0 && !hr[end]) end--;
+    if(start>=hr.length) start=0;
+    if(end<start) end=hr.length-1;
+    return {start, end};
+  }
+
+  const window =
+    (kind==="users") ? 10 :
+    (kind==="periods"||kind==="groups"||kind==="calendar") ? 20 :
+    (kind==="evals") ? 50 : 80;
+
+  let best=null;
+  for(const start of candidates){
+    const stop = Math.min(hr.length, start+window);
+    let count=0, last=start;
+    for(let j=start;j<stop;j++){
+      const c = canonicalHeader(hr[j]);
+      if(knownCanon.size){
+        if(knownCanon.has(c) || knownCanon.has(canonicalHeader(String(hr[j]||"")))){ count++; last=j; }
+      } else {
+        if(hr[j]){ count++; last=j; }
+      }
+    }
+    const score = count*1000 - start; // prefer more matches, then leftmost
+    if(!best || score>best.score) best={start, end:last, score};
+  }
+  return {start: best.start, end: Math.max(best.start, best.end)};
+}
+
+
+function tableFromValues(values){
+  values = values || [[]];
+  const header = (values[0]||[]).map(h=>String(h||"").trim());
+  const canon = header.map(h=>canonicalHeader(h));
+  const rows = [];
+  for(let r=1;r<values.length;r++){
+    const rowArr = values[r] || [];
+    const obj = {};
+    header.forEach((h,i)=>{ if(!h) return; const val = rowArr[i] ?? ""; obj[h]=val; const ch = canon[i]; if(ch && ch!==h) obj[ch]=val; });
+    // keep also original values
+    obj.__rowIndex = r+1;
+    rows.push(obj);
+  }
+  return { values, header, rows };
+}
+
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,"&quot;"); }
+function setToast(msg, kind="ok"){ state.toast={msg,kind,ts:Date.now()}; render(); setTimeout(()=>{ if(state.toast && Date.now()-state.toast.ts>2600){ state.toast=null; render();}},2800);}
+let _programmaticHashChange = false;
+function routeTo(hash){ state.route=hash; _programmaticHashChange=true; location.hash=hash; render(); }
+window.addEventListener("hashchange", ()=>{ if(_programmaticHashChange){ _programmaticHashChange=false; return; } state.route=location.hash||"#select"; render(); });
+
+/** =================== AUTH =================== **/
+let tokenClient=null;
+
+// Wait until Google Identity Services is loaded
+let _gsiReadyResolve=null;
+const gsiReady = new Promise(res=>{ _gsiReadyResolve=res; });
+
+function initGsi(){
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SCOPES_STR,
+    callback: ()=>{} // will be set per request
+  });
+  if(_gsiReadyResolve){ _gsiReadyResolve(true); _gsiReadyResolve=null; }
+
+  // If we have a stored token but user isn't booted yet, try boot once GIS is ready
+  if(state.token && !state.user){
+    bootAfterLogin().catch(e=>{ console.error(e); setToast(e.message||"Başlatma hatası","error"); render(); });
+  }
+}
+
+async function waitGsi(ms=4000){
+  return await Promise.race([
+    gsiReady.then(()=>true),
+    new Promise(res=>setTimeout(()=>res(false), ms))
+  ]);
+}
+
+async function requestAccessToken({prompt=""}={}){
+  const ok = await waitGsi();
+  if(!ok || !tokenClient) throw new Error("Giriş sistemi (GSI) yüklenemedi.");
+  return await new Promise((resolve,reject)=>{
+    tokenClient.callback = async (resp)=>{
+      if(resp.error){ reject(new Error(resp.error)); return; }
+      state.token = resp.access_token;
+      localStorage.setItem("access_token", state.token);
+      if(resp.expires_in){
+        const exp = Date.now() + Number(resp.expires_in)*1000;
+        localStorage.setItem("access_token_exp", String(exp));
+      }
+      resolve(resp);
+    };
+    try{ tokenClient.requestAccessToken({prompt}); }
+    catch(e){ reject(e); }
+  });
+}
+
+async function login(){
+  try{
+    await requestAccessToken({prompt:"consent"});
+    await bootAfterLogin();
+    setToast("Giriş başarılı", "ok");
+    render();
+  }catch(e){
+    console.error(e);
+    setToast("Giriş hatası: "+(e.message||e), "error");
+  }
+}
+
+async function tryRefreshToken(){
+  try{
+    await requestAccessToken({prompt:""});
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function logout(){
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("active_dataset");
+  state.token=null; state.user=null; state.spreadsheetId=null; state.datasetName=null;
+  state.role=null; state.displayName=null; state.canSeeDashboard=false; state.canSeeAllReviews=false; state.canSeeHR=false; state.canManageHR=false;
+  state.tables={}; state.route="#select"; state.activeDonemId=null; state.activeDonemIds=[]; state.modal=null;
+  routeTo("#select");
+}
+async function gfetch(url, opts={}, _retry=0){
+  if(!state.token) throw new Error("No token");
+  const r = await fetch(url, { ...opts, headers:{...(opts.headers||{}), Authorization:`Bearer ${state.token}`} });
+
+  if(r.status===401){
+    // Try silent refresh once (if GSI is loaded), then retry the same request.
+    if(_retry < 1){
+      const ok = await tryRefreshToken().catch(()=>false);
+      if(ok){
+        return await gfetch(url, opts, _retry+1);
+      }
+    }
+    logout();
+    throw new Error("401: Oturum süresi doldu. Tekrar giriş yap.");
+  }
+
+  if(!r.ok){
+    const t=await r.text().catch(()=> "");
+    throw new Error(`HTTP ${r.status}: ${t.slice(0,240)}`);
+  }
+  return r;
+}
+async function fetchUserProfile(){
+  const r = await gfetch("https://www.googleapis.com/oauth2/v3/userinfo");
+  return await r.json();
+}
+
+/** =================== DRIVE LISTING =================== **/
+async function listFolderFiles(){
+  const q = encodeURIComponent(`'${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+  const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime)");
+  const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&pageSize=1000&orderBy=name`
+    + `&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&spaces=drive`;
+  const r = await gfetch(url);
+  const data = await r.json();
+  return data.files||[];
+}
+function isGoogleSheet(f){ return f?.mimeType==="application/vnd.google-apps.spreadsheet"; }
+
+async function loadDriveList(){
+  state.loading=true; render();
+  try{
+    state.driveFiles = await listFolderFiles();
+    state.driveLoaded=true;
+    setToast("Dosyalar listelendi", "ok");
+  }finally{ state.loading=false; render(); }
+}
+function renderDriveList(host){
+  host.innerHTML="";
+  if(!state.driveLoaded){
+    host.appendChild(el(`<div class="text-sm text-slate-500">“Dosyaları Listele” butonuna bas.</div>`)); return;
+  }
+  const q=(state.q||"").toLowerCase();
+  const list=(state.driveFiles||[]).filter(f=>!q || (f.name||"").toLowerCase().includes(q));
+  if(!list.length){ host.appendChild(el(`<div class="text-sm text-slate-500">Eşleşen dosya yok.</div>`)); return; }
+  const grid=el(`<div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"></div>`);
+  list.forEach(f=>{
+    const can=isGoogleSheet(f);
+    const badge = can ? "Google Sheet" : (f.mimeType?.includes("spreadsheetml") ? "Excel (.xlsx) — desteklenmiyor" : (f.mimeType||"Dosya"));
+    const b=el(`
+      <button class="text-left rounded-3xl p-4 glass hover:bg-white transition fadeIn ${can?"":"opacity-60 cursor-not-allowed"}">
+        <div class="font-semibold">${escapeHtml(f.name||"")}</div>
+        <div class="text-xs text-slate-500 mt-1">${escapeHtml(badge)} • ${escapeHtml((f.modifiedTime||"").slice(0,10))}</div>
+      </div>
+    `);
+    if(can) b.addEventListener("click", ()=>selectDataset(f));
+    grid.appendChild(b);
+  });
+  host.appendChild(grid);
+}
+function selectDataset(file){
+  if(!file?.id){ setToast("Dosya ID bulunamadı", "warn"); return; }
+  state.spreadsheetId=file.id;
+  state.datasetName=file.name||"";
+  localStorage.setItem("active_dataset", JSON.stringify({id:file.id,name:file.name||""}));
+  bootAfterDataset();
+}
+
+/** =================== SHEETS IO =================== **/
+async function sheetsBatchGet(ranges){
+  if(!state.spreadsheetId){ localStorage.removeItem("active_dataset"); routeTo("#select"); throw new Error("Spreadsheet seçilmedi."); }
+  const params = ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join("&");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}/values:batchGet?majorDimension=ROWS&${params}`;
+  const r = await gfetch(url);
+  return await r.json();
+}
+
+async function detectEvalsPadA(){
+  // Değerlendirmeler sayfasında A sütunu boş header ise (template böyle),
+  // Sheets API header'ı B'den döndürür. Yazarken hizalamak için 1 hücre pad ederiz.
+  const sheet = (state.sheetMap?.evals || SHEETS.evals);
+  try{
+    const res = await sheetsBatchGet([`${sheet}!A1:A1`]);
+    const vr = (res.valueRanges||[])[0] || {};
+    const v = vr.values?.[0]?.[0];
+    state.evalsPadA = !String(v||"").trim(); // A1 boşsa true
+  }catch(e){
+    // Güvenli varsayım: pad yok
+    state.evalsPadA = false;
+  }
+}
+
+async function sheetsAppendRow(sheetName, rowArray, rangeOverride=null){
+  // Appends a row safely in the intended table range.
+  const range = rangeOverride || `${sheetName}!A:ZZ`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  const body = { majorDimension: "ROWS", values: [rowArray] };
+  return await gfetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+}
+
+
+
+async function refreshEvals(){
+  const sheet = (state.sheetMap?.evals || SHEETS.evals);
+  // Read the main range + a small header probe range. The probe lets us detect leading empty columns reliably.
+  const ranges = [`${sheet}!A1:ZZ`, `${sheet}!A1:Z1`];
+  const res = await sheetsBatchGet(ranges);
+
+  const vrMain = (res.valueRanges||[])[0] || {};
+  let valuesRaw = vrMain.values || [[]];
+
+  const vrProbe = (res.valueRanges||[])[1] || {};
+  const probeRow = ((vrProbe.values||[[]])[0]||[]).map(h=>String(h||"").trim());
+  const probeIdx = probeRow.findIndex(v=>canonicalHeader(v)==="StajyerID");
+
+  // If the API omitted leading empty columns in the main response, pad them back based on probeIdx.
+  if(probeIdx>0){
+    const mainFirst = String(((valuesRaw[0]||[])[0]||"")).trim();
+    if(canonicalHeader(mainFirst)==="StajyerID"){
+      valuesRaw = (valuesRaw||[[]]).map(r=>{
+        r = r || [];
+        const padded = Array(probeIdx).fill("");
+        return padded.concat(r);
+      });
+    }
+  }
+
+  // Detect the correct header block (prevents writing into a duplicated/stray block on the right)
+  const headerRow = (valuesRaw[0]||[]).map(h=>String(h||"").trim());
+  const span = detectHeaderSpan(headerRow, "evals");
+  const start = Number(span.start||0);
+  const end = Number(span.end||0);
+  const width = Math.max(0, end - start + 1);
+
+  const sliced = (valuesRaw||[[]]).map(r=>{
+    r = r || [];
+    while(r.length < end+1) r.push("");
+    const seg = r.slice(start, end+1);
+    while(seg.length < width) seg.push("");
+    return seg;
+  });
+
+  const t = tableFromValues(sliced);
+  t._colStart = start;
+  t._colEnd = end;
+  state.tables = state.tables || {};
+  state.tables[sheet] = t;
+}
+
+
+async function sheetsGetMeta(){
+  if(!state.spreadsheetId){ throw new Error("Spreadsheet seçilmedi."); }
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}?fields=sheets.properties.title`;
+  // gfetch returns a Response; parse JSON before reading fields
+  const r = await gfetch(url);
+  const j = await r.json();
+  return (j?.sheets||[]).map(s=>s?.properties?.title).filter(Boolean);
+}
+
+async function sheetsUpdate(range, values){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+  const r = await gfetch(url, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({range, majorDimension:"ROWS", values})});
+  return await r.json();
+}
+async function sheetsAppend(range, values){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  const r = await gfetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({values})});
+  return await r.json();
+}
+function toObjects(values){
+  const header = (values?.[0]||[]).map(h=>String(h||"").trim());
+  return (values||[]).slice(1).map(row=>{
+    const o={};
+    header.forEach((h,i)=> o[h]=row?.[i] ?? "");
+    return o;
+  });
+}
+async function loadAllTables(){
+  // Resolve actual sheet titles (supports Turkish chars / renamed tabs) before batchGet
+  const titles = await sheetsGetMeta();
+  const norm = (s)=>String(s||"").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+
+
+  state.sheetTitles = titles;
+
+  // Header scan: helps detect the Users tab even if it has a custom name.
+  let headerByTitle = new Map();
+  try{
+    const headerRanges = titles.map(t=>`${t}!A1:Z1`);
+    const hres = await sheetsBatchGet(headerRanges);
+    (hres.valueRanges||[]).forEach((vr, idx)=>{
+      const title = titles[idx];
+      const row = (vr.values?.[0]||[]).map(h=>String(h||"").trim());
+      headerByTitle.set(title, row);
+    });
+  }catch(e){
+    console.warn("[debug] Header scan failed", e);
+  }
+
+  const detectUsersSheet = ()=>{
+    for(const t of titles){
+      const row = headerByTitle.get(t) || [];
+      const canon = row.map(h=>canonicalHeader(h));
+      if(canon.includes("Email") && canon.includes("Rol")) return t;
+    }
+    // Fallback: by title match
+    for(const t of titles){
+      const nt = norm(t);
+      if(nt.includes("kullanic") || nt.includes("user")) return t;
+    }
+    return null;
+  };
+  const usersByHeader = detectUsersSheet();
+
+  const detectCalendarSheet = ()=>{
+    for(const t of titles){
+      const row = headerByTitle.get(t) || [];
+      const canon = row.map(h=>canonicalHeader(h));
+      if(canon.includes("YorumIzinliRoller") && canon.includes("Tarih")) return t;
+    }
+    // Fallback: by title match
+    for(const t of titles){
+      const nt = norm(t);
+      if(nt.includes("takvim") || nt.includes("calendar")) return t;
+    }
+    return null;
+  };
+  const calendarByHeader = detectCalendarSheet();
+
+  const pick = (preferred, fallbacks=[])=>{
+    const want=[preferred, ...fallbacks].map(norm);
+    for(const t of titles){ if(want.includes(norm(t))) return t; }
+    for(const t of titles){ const nt=norm(t); if(want.some(w=>nt.includes(w))) return t; }
+    return preferred;
+  };
+
+  state.sheetMap = {
+    users: usersByHeader || pick(SHEETS.users, ["Kullanicilar","KULLANICILAR","USERS"]),
+    trainees: pick(SHEETS.trainees, ["Stajyerler","STAJYERLER","TRAINEES"]),
+    evals: pick(SHEETS.evals, ["Degerlendirmeler","Değerlendirmeler","DEGERLENDIRMELER","DEĞERLENDİRMELER","EVALS"]),
+    periods: pick(SHEETS.periods, ["Donemler","Dönemler","DONEMLER","DÖNEMLER","PERIODS"]),
+    groups: pick(SHEETS.groups, ["Gruplar","GRUPLAR","GROUPS"]),
+    calendar: calendarByHeader || pick(SHEETS.calendar, ["Takvim","TAKVIM","CALENDAR"]),
+    apps: pick(SHEETS.apps, ["Basvurular","Başvurular","BASVURULAR","APPLICATIONS"]),
+hr: pick(SHEETS.hr, ["IseGiris","İşeGiriş","İşe Giriş","ISEGIRIS","HR","Ise Giris"]),
+  };
+
+  const meta = [
+    { kind:"users", name: state.sheetMap.users },
+    { kind:"trainees", name: state.sheetMap.trainees },
+    { kind:"periods", name: state.sheetMap.periods },
+    { kind:"groups", name: state.sheetMap.groups },
+    { kind:"calendar", name: state.sheetMap.calendar },
+    { kind:"apps", name: state.sheetMap.apps },
+    { kind:"evals", name: state.sheetMap.evals },
+{ kind:"hr", name: state.sheetMap.hr },
+  ];
+  const hasTitle = (name)=> titles.some(t=>norm(t)===norm(name));
+  const meta2 = meta.filter(m=>m?.name && hasTitle(m.name));
+  const ranges = meta2.map(m=>`${m.name}!A1:${(m.kind==="users"||m.kind==="hr")?"ZZZ":"ZZ"}`);
+
+  const res = await sheetsBatchGet(ranges);
+  const out={};
+  (res.valueRanges||[]).forEach((vr,idx)=>{
+    const m = meta2[idx] || {};
+    const name = (ranges[idx]||vr.range||"").split("!")[0];
+    let valuesRaw = vr.values || [[]];
+    if(valuesRaw[0]) valuesRaw[0] = valuesRaw[0].map(h=>String(h||"").trim());
+    let trimmed;
+    if((m.kind||"")==="hr" || (m.kind||"")==="calendar"){
+      // HR & Takvim: keep full header width to avoid trimming away important columns.
+      // (Takvim needs YorumIzinliRoller; HR needs full history fields)
+      const headerRow = (valuesRaw[0]||[]);
+      trimmed = { sliced: valuesRaw, start: 0, end: Math.max(0, headerRow.length-1), width: headerRow.length };
+    }else{
+      trimmed = trimValuesToKnown(valuesRaw, m.kind||"");
+    }
+    const t = tableFromValues(trimmed.sliced);
+    t._colStart = trimmed.start;
+    t._colEnd = trimmed.end;
+    t._kind = m.kind || "";
+    out[name] = t;
+  });
+  state.tables = out;
+  return out;
+}
+
+
+/** =================== APP LOGIC (APP SCRIPT COMPAT) =================== **/
+function roleNormalize(r){
+  const raw=String(r||"").trim().toLowerCase();
+  const s = raw.normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+
+  if(s.includes("admin")) return "ADMIN";
+  if(s.includes("super")) return "SUPERVISOR";
+
+  // IK (avoid matching inside words like 'psikoloji')
+  if((/(^|\s)ik($|\s)/.test(s)) || s.includes("insan kaynak") || s.includes("human resources") || s.startsWith("hr") || s.includes(" hr")) return "IK";
+
+  // Proje Uzmanı
+  if(s.includes("proje uzman") || (s.includes("proje") && s.includes("uzman"))) return "PROJE_UZMANI";
+
+  if(s.includes("hostel") || (s.includes("kurumsal") && s.includes("iletisim"))) return "HOSTEL_UZMANI";
+  if(s.includes("uzman")) return "UZMAN";
+  return raw.toUpperCase() || "UZMAN";
+}
+function roleLabel(r){
+  const x = String(r||"").trim().toUpperCase();
+  if(x==="PROJE_UZMANI") return "PROJE UZMANI";
+  if(x==="IK") return "İK";
+  if(x==="HOSTEL_UZMANI") return "KURUMSAL İLETİŞİM";
+  return x || "—";
+}
+function cleanEmail(v){
+  // Normalize email values coming from Sheets (can include hidden chars, mailto:, Name <mail>, etc.)
+  let s = String(v ?? "");
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  s = s.trim();
+  if(!s) return "";
+  const m = s.match(/<([^>]+)>/);
+  if(m) s = m[1].trim();
+  s = s.replace(/^mailto:/i, "").trim();
+  return s.toLowerCase();
+}
+function emailListFromCell(v){
+  const raw = String(v ?? "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  if(!raw) return [];
+  const m = raw.match(/<([^>]+)>/);
+  const s = (m ? m[1] : raw).replace(/^mailto:/i, "");
+  return s.split(/[;,]+/).map(x=>cleanEmail(x)).filter(Boolean);
+}
+function rowEmail(r){
+  // Support different column headers: Email / Eposta / E-posta / Mail ...
+  const cell = (r?.Email ?? r?.Eposta ?? r?.EPosta ?? r?.["E-posta"] ?? r?.["E Posta"] ?? r?.Mail ?? r?.["E-mail"] ?? r?.["E Mail"] ?? "");
+  return cleanEmail(cell);
+}
+
+function findUserRow(){
+  const rows=state.tables[state.sheetMap?.users || SHEETS.users]?.rows||[];
+  const email=cleanEmail(state.user?.email||"");
+  if(!email) return null;
+  return rows.find(r=>{
+    const cell = (r?.Email ?? r?.Eposta ?? r?.EPosta ?? r?.["E-posta"] ?? r?.["E Posta"] ?? r?.Mail ?? r?.["E-mail"] ?? r?.["E Mail"] ?? "");
+    const list = emailListFromCell(cell);
+    return list.includes(email);
+  });
+}
+function currentEmail(){ return String(state.user?.email||""); }function parseAnyDate(raw){
+  const s = String(raw||"").trim();
+  if(!s) return null;
+
+  // Google Sheets can sometimes return date serials
+  if(/^\d+(\.\d+)?$/.test(s)){
+    const n = Number(s);
+    // plausible serial day range
+    if(n>20000 && n<60000){
+      const epoch = Date.UTC(1899,11,30);
+      return new Date(epoch + n*86400000);
+    }
+  }
+
+  const t = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  const hh = t ? Number(t[1]) : 0;
+  const mm = t ? Number(t[2]) : 0;
+  const ss = t ? Number(t[3]||0) : 0;
+
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return new Date(Date.UTC(Number(m[1]), Number(m[2])-1, Number(m[3]), hh, mm, ss));
+
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if(m) return new Date(Date.UTC(Number(m[3]), Number(m[2])-1, Number(m[1]), hh, mm, ss));
+
+  const d = new Date(s);
+  if(!isNaN(d.getTime())) return d;
+  return null;
+}
+
+
+function normDonemIds(ids){
+  const out=[]; const seen=new Set();
+  (Array.isArray(ids)?ids:[ids]).forEach(x=>{
+    const v=String(x||"").trim();
+    if(!v) return;
+    if(seen.has(v)) return;
+    seen.add(v); out.push(v);
+  });
+  return out;
+}
+function getActiveDonemIds(){ return normDonemIds(state.activeDonemIds); }
+function setActiveDonemIds(ids){
+  const arr = normDonemIds(ids);
+  state.activeDonemIds = arr;
+  state.activeDonemId = arr[0] || null;
+}
+function allDonemIds(){
+  return normDonemIds(donemOptions().map(d=>d.DonemID));
+}
+function isAllDonemSelected(){
+  const sel=getActiveDonemIds();
+  const all=allDonemIds();
+  if(!sel.length || !all.length) return false;
+  return all.every(id=>sel.includes(id)) && sel.length>=all.length;
+}
+function activeDonemSummary(){
+  const sel=getActiveDonemIds();
+  const map=new Map(donemOptions().map(d=>[String(d.DonemID), String(d.DonemAdi||d.DonemID)]));
+  if(!sel.length) return "Seçiniz";
+  if(isAllDonemSelected()) return "Tümü";
+  if(sel.length===1) return map.get(sel[0]) || sel[0];
+  const first = map.get(sel[0]) || sel[0];
+  return `${first} +${sel.length-1}`;
+}
+
+function evalMatchesActivePeriod(evalRow){
+  const sel = getActiveDonemIds();
+  if(!sel.length) return false;
+  if(isAllDonemSelected()) return true;
+
+  const periods = state.tables[state.sheetMap?.periods || SHEETS.periods]?.rows||[];
+  const chosen = sel.map(pid => periods.find(x=>String(x.DonemID||"").trim()===String(pid).trim())).filter(Boolean);
+  if(!chosen.length) return true;
+
+  const d = parseAnyDate(evalRow?.Tarih || evalRow?.Date || "");
+  if(!d) return true;
+
+  for(const p of chosen){
+    const startStr = p.BaslangicTarihi || p.Baslangic || p.Start || "";
+    const endStr   = p.BitisTarihi || p.Bitisi || p.End || "";
+
+    const start = parseAnyDate(startStr);
+    let end = parseAnyDate(endStr);
+
+    // make end-date inclusive if no explicit time is given
+    if(end && String(endStr||"").trim() && !String(endStr).includes(":")){
+      end = new Date(end.getTime() + 86400000 - 1);
+    }
+
+    if(start && d < start) continue;
+    if(end && d > end) continue;
+    return true;
+  }
+  return false;
+}
+
+function donemOptions(){
+  const rows=state.tables[state.sheetMap?.periods || SHEETS.periods]?.rows||[];
+
+  // Some templates keep multiple rows per DonemID (e.g. Adler/Pavlov under the same 42-RK).
+  // For the selector we want UNIQUE DonemID entries to avoid duplicate-looking options and "double selection".
+  const byId = new Map();
+  rows.forEach(r=>{
+    const id = String(r.DonemID||"").trim();
+    if(!id) return;
+    const name = String(r.DonemAdi||"").trim();
+    if(!byId.has(id)){
+      byId.set(id, { DonemID:id, names:new Set(), BaslangicTarihi:String(r.BaslangicTarihi||"") });
+    }
+    if(name) byId.get(id).names.add(name);
+
+    const cur = String(byId.get(id).BaslangicTarihi||"");
+    const nxt = String(r.BaslangicTarihi||"");
+    if(nxt && (!cur || nxt > cur)) byId.get(id).BaslangicTarihi = nxt;
+  });
+
+  const out = Array.from(byId.values()).map(o=>{
+    const names = Array.from(o.names);
+    const label = names.length ? (o.DonemID + " — " + names.join(" / ")) : o.DonemID;
+    return { DonemID:o.DonemID, DonemAdi:label, BaslangicTarihi:o.BaslangicTarihi||"" };
+  });
+
+  // Sort by DonemID (newer cohorts first if numeric prefixes exist)
+  return out.sort((a,b)=>String(b.DonemID||"").localeCompare(String(a.DonemID||"")) || String(a.DonemAdi||"").localeCompare(String(b.DonemAdi||"")));
+}
+function groupRowsForActiveDonem(){
+  const rows=state.tables[state.sheetMap?.groups || SHEETS.groups]?.rows||[];
+  const sel=getActiveDonemIds();
+  if(!sel.length) return [];
+  if(isAllDonemSelected()) return rows;
+  return rows.filter(r=>sel.includes(String(r.DonemID||"")));
+}
+function uniq(list){
+  const out=[]; const seen=new Set();
+  list.forEach(x=>{ const v=String(x||"").trim(); if(!v) return; if(seen.has(v)) return; seen.add(v); out.push(v); });
+  return out;
+}
+function normFilterArray(v){
+  if(Array.isArray(v)) return v.map(x=>String(x||"").trim()).filter(Boolean);
+  const s = String(v||"").trim();
+  return s ? [s] : [];
+}
+function getFilterSelections(key){
+  state.filters = state.filters || {};
+  state.filters[key] = normFilterArray(state.filters[key]);
+  return state.filters[key];
+}
+function matchFilter(sel, value){
+  const arr = normFilterArray(sel);
+  if(arr.length===0) return true; // empty => no restriction (Tümü)
+  return arr.includes(String(value||"").trim());
+}
+
+function applyFilters(list){
+  const f=state.filters||{};
+  return list.filter(t=>{
+    const sehir=String(t.İkametgahŞehri||"").trim();
+    const eg=String(t.EgitimDurumu||"").trim();
+    const bas=String(t.BasvuruAlani||"").trim();
+    const dur=String(t.Durum||"").trim();
+    const hos=String(t.HostelAdi||"").trim();
+    const grp=String(t.GrupID||"").trim();
+
+    if(!matchFilter(f.sehir, sehir)) return false;
+    if(!matchFilter(f.egitim, eg)) return false;
+    if(!matchFilter(f.basvuru, bas)) return false;
+    if(!matchFilter(f.durum, dur)) return false;
+    if(!matchFilter(f.hostel, hos)) return false;
+    if(!matchFilter(f.grup, grp)) return false;
+
+    return true;
+  });
+}
+
+function traineeRowsForActiveDonemRaw(){
+  const trainees=state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[];
+  const groups=groupRowsForActiveDonem();
+  const groupSet=new Set(groups.map(g=>String(g.GrupID||"")));
+  return trainees.filter(t=>groupSet.has(String(t.GrupID||"")));
+}
+
+function traineeRowsForActiveDonem(){
+  const rows=traineeRowsForActiveDonemRaw();
+  return applyFilters(rows);
+}
+
+function isAssignedToCurrentUser(grupRow){
+  const s=String(grupRow?.SorumluUzman||"").toLowerCase();
+  const email=currentEmail().toLowerCase();
+  // comma-separated emails
+  return s.split(",").map(x=>x.trim()).filter(Boolean).includes(email);
+}
+function traineesAssignedToCurrentUser(){
+  // Everyone should respect the same filter panel.
+  const traineesAll = state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[];
+  let base = [];
+
+  if(state.canSeeDashboard || state.canSeeAllReviews){
+    // Supervisor/Admin/Proje Uzmanı: all trainees in selected period(s)
+    base = traineeRowsForActiveDonemRaw();
+  }else{
+    // Uzman/Hostel: only trainees in groups assigned to current user
+    const groups = groupRowsForActiveDonem().filter(isAssignedToCurrentUser);
+    const gidSet = new Set(groups.map(g=>String(g.GrupID||"")));
+    base = traineesAll.filter(t=>gidSet.has(String(t.GrupID||"")));
+  }
+
+  return applyFilters(base);
+}
+
+function numVal(x){ const s=String(x??"").trim().replace(",","."); const n=parseFloat(s); return Number.isFinite(n)?n:0; }
+function avgScoreFromEvalRow(r){
+  const p1=numVal(r.Kriter1_Puan);
+  const p2=numVal(r.Kriter2_Puan);
+  const p3=numVal(r.Kriter3_Puan);
+  const n = [r.Kriter1_Puan,r.Kriter2_Puan,r.Kriter3_Puan].filter(x=>String(x).trim()!=="").length || 3;
+  return (p1+p2+p3)/Math.max(n,1);
+}
+
+function humanAvgFromRow(r){
+  const v=numVal(r.Kriter1_Puan);
+  const i=numVal(r.Kriter2_Puan);
+  const e=numVal(r.Kriter3_Puan);
+  const cnt=[r.Kriter1_Puan,r.Kriter2_Puan,r.Kriter3_Puan].filter(x=>String(x??"").trim()!=="").length || 3;
+  return (v+i+e)/Math.max(cnt,1);
+}
+function criterionAverages(tid){
+  const rows=evalRowsForTrainee(tid);
+  let vSum=0,iSum=0,eSum=0, vN=0,iN=0,eN=0;
+  rows.forEach(r=>{
+    const v = String(r.Kriter1_Puan??"").trim();
+    const i = String(r.Kriter2_Puan??"").trim();
+    const e = String(r.Kriter3_Puan??"").trim();
+    if(v!==""){ vSum+=numVal(v); vN++; }
+    if(i!==""){ iSum+=numVal(i); iN++; }
+    if(e!==""){ eSum+=numVal(e); eN++; }
+  });
+  const avg = (sum,n)=> n? (sum/n) : null;
+  const vAvg=avg(vSum,vN), iAvg=avg(iSum,iN), eAvg=avg(eSum,eN);
+  const present=[vAvg,iAvg,eAvg].filter(x=>x!=null);
+  const humanAvg = present.length ? (present.reduce((a,b)=>a+b,0)/present.length) : null;
+  // Labels: use most recent saved basliks (fallback to defaults)
+  let latest = null;
+  let latestKey = "";
+  rows.forEach(r=>{
+    const d = toIsoDate(r.Tarih) || "";
+    if(d && d>=latestKey){ latestKey = d; latest = r; }
+  });
+  const labels = latest ? [
+    String(latest.Kriter1_Baslik||"Verim"),
+    String(latest.Kriter2_Baslik||"İlgi"),
+    String(latest.Kriter3_Baslik||"Eğitmen")
+  ] : ["Verim","İlgi","Eğitmen"];
+  // AI average
+  let aiSum=0, aiN=0;
+  rows.forEach(r=>{
+    const ap = String(r.AI_Puan ?? r["AI_Puan"] ?? r["AI Puan"] ?? r["AIPuan"] ?? "").trim();
+    if(ap !== ""){ const n=Number(ap); if(Number.isFinite(n) && n>=1 && n<=5){ aiSum+=n; aiN++; } }
+  });
+  const aiAvg = aiN ? (aiSum/aiN) : null;
+  return { vAvg, iAvg, eAvg, humanAvg, aiAvg, labels };
+}
+
+function aggregateScores(tid){
+  const rows=evalRowsForTrainee(tid);
+  const byRole=new Map();
+  const allHuman=[];
+  rows.forEach(r=>{
+    const role=roleNormalize(r.DegerlendirmeTipi||"");
+    const h=humanAvgFromRow(r);
+    if(Number.isFinite(h)) allHuman.push(h);
+    const cur=byRole.get(role)||{human:[]};
+    if(Number.isFinite(h)) cur.human.push(h);
+    byRole.set(role, cur);
+  });
+  const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const out={
+    overallHuman: avg(allHuman),
+    byRole: {}
+  };
+  for(const [k,v] of byRole.entries()){
+    out.byRole[k]={ human: avg(v.human) };
+  }
+  return out;
+}
+
+
+function evalRowsForTrainee(tid){
+  const rows = state.tables[state.sheetMap?.evals || SHEETS.evals]?.rows || [];
+  const id = String(tid||"").trim();
+
+  const getId = (r)=> String(
+    r.StajyerID ?? r.StajyerId ?? r["Stajyer ID"] ?? r["StajyerId"] ?? r["Stajyer_Id"] ?? ""
+  ).trim();
+
+  const isMeaningful = (r)=>{
+    const keys = ["Tarih","DegerlendirenUzman","DegerlendirmeTipi","Kriter1_Puan","Kriter2_Puan","Kriter3_Puan","GenelNotlar"];
+    return keys.some(k=> String(r[k]??"").trim()!=="");
+  };
+
+  const sel = getActiveDonemIds();
+  const restrict = sel.length && !isAllDonemSelected();
+
+
+  if(!sel.length) return [];
+
+  return rows
+    .filter(r=> getId(r)===id)
+    // If active period is selected and row has DonemID, keep only matching
+    .filter(r=>{
+      if(!restrict) return true;
+      const rid = String(r.DonemID||"").trim();
+      if(rid) return sel.includes(rid);
+      return evalMatchesActivePeriod(r);
+    })
+    .filter(isMeaningful);
+}
+
+function myEvalForDate(tid, isoDate){
+  const sheet = (state.sheetMap?.evals || SHEETS.evals);
+  const t = state.tables?.[sheet];
+  const rows = (t?.rows)||[];
+  const me = String(currentEmail()||"").toLowerCase().trim();
+  const myRole = roleNormalize(state.role||"");
+  const sel = getActiveDonemIds();
+  const restrict = sel.length && !isAllDonemSelected();
+
+  if(!sel.length) return null;
+
+  const wantDate = String(isoDate||"").trim();
+  if(!wantDate) return null;
+
+  for(const r of rows){
+    const rid = String(r.StajyerID||"").trim();
+    if(!rid || rid!==String(tid).trim()) continue;
+
+    const who = String(r.DegerlendirenUzman||r.Degerlendiren||r.Email||"").toLowerCase().trim();
+    if(who && me && who!==me) continue;
+
+    const rRole = roleNormalize(r.DegerlendirmeTipi||"");
+    if(myRole && rRole && rRole!==myRole) continue;
+
+    if(restrict){
+      const rp = String(r.DonemID||r.Donem||"").trim();
+      if(rp && !sel.includes(rp)) continue;
+      if(!rp && !evalMatchesActivePeriod(r)) continue;
+    }
+
+    const d = toIsoDate(r.Tarih);
+    if(!d || d!==wantDate) continue;
+
+    // must be meaningful
+    const hasScore = (String(r.Kriter1_Puan||"").trim()!==""
+                   || String(r.Kriter2_Puan||"").trim()!==""
+                   || String(r.Kriter3_Puan||"").trim()!==""
+                   );
+    const hasNote = String(r.GenelNotlar||r.Not||"").trim()!=="";
+    if(!(hasScore||hasNote)) continue;
+
+    return r;
+  }
+  return null;
+}
+
+function myEvalForTraineeDate(tid, isoDate){
+  const email = String(currentEmail()||"").toLowerCase();
+  const role = roleNormalize(state.role||"");
+  const wantDate = String(isoDate||"").trim();
+  if(!wantDate) return null;
+
+  const sel = getActiveDonemIds();
+  const restrict = sel.length && !isAllDonemSelected();
+
+  if(!sel.length) return [];
+  const rows = evalRowsForTrainee(tid);
+
+  return rows.find(r=>{
+    if(String(r.DegerlendirenUzman||"").toLowerCase()!==email) return false;
+    const rr = roleNormalize(r.DegerlendirmeTipi||"");
+    if(role && rr && rr!==role) return false;
+
+    if(restrict){
+      const rp = String(r.DonemID||r.Donem||"").trim();
+      if(rp && !sel.includes(rp)) return false;
+      if(!rp && !evalMatchesActivePeriod(r)) return false;
+    }
+
+    const d = toIsoDate(r.Tarih);
+    if(!d || d!==wantDate) return false;
+    return true;
+  }) || null;
+}
+
+function isDoneForDate(tid, isoDate){
+  return !!myEvalForTraineeDate(tid, isoDate);
+}
+
+// Backward-compatible helper (uses currently selected review date)
+function isDone(tid){
+  return isDoneForDate(tid, String(state.reviewDate||"").trim());
+}
+function dashboardScoreForTrainee(tid){
+  // overall human average across all evaluations (not total)
+  const agg = aggregateScores(tid);
+  return agg.overallHuman;
+}
+
+function isValidYMD(Y,M,D){
+  if(!Number.isFinite(Y) || !Number.isFinite(M) || !Number.isFinite(D)) return false;
+  if(Y < 1900 || Y > 2100) return false;
+  if(M < 1 || M > 12) return false;
+  if(D < 1 || D > 31) return false;
+  const dt = new Date(Y, M-1, D);
+  return dt.getFullYear()===Y && (dt.getMonth()+1)===M && dt.getDate()===D;
+}
+function parseEvalDateTs(s){
+  s = String(s||"").trim();
+  if(!s) return null;
+
+  // ISO: 2026-02-17 or 2026-02-17 08:45
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if(m){
+    const Y=+m[1], M=+m[2], D=+m[3], hh=+(m[4]||0), mm=+(m[5]||0);
+    if(!isValidYMD(Y,M,D)) return null;
+    return new Date(Y, M-1, D, hh, mm, 0, 0).getTime();
+  }
+
+  // TR (and also US fallback): 17.02.2026 or 17/02/2026 (+ optional time)
+  m = s.match(/^(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})(?:[ T](\d{2}):(\d{2}))?/);
+  if(m){
+    const a=+m[1], b=+m[2], Y=+m[3], hh=+(m[4]||0), mm=+(m[5]||0);
+    // try DD/MM first
+    if(isValidYMD(Y, b, a)) return new Date(Y, b-1, a, hh, mm, 0, 0).getTime();
+    // then try MM/DD (if user typed in US order)
+    if(isValidYMD(Y, a, b)) return new Date(Y, a-1, b, hh, mm, 0, 0).getTime();
+    return null;
+  }
+
+  // Sheets/Excel serial date number (UNFORMATTED_VALUE) e.g. 46000 or 46000.5
+  // Google Sheets/Excel epoch: 1899-12-30. Unix epoch offset in days: 25569.
+  const num = Number(String(s).replace(",", "."));
+  if(Number.isFinite(num) && num > 10000 && num < 90000){
+    return Math.round((num - 25569) * 86400 * 1000);
+  }
+
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
+function fmtEvalLabel(ts){
+  const d = new Date(ts);
+  const Y = d.getFullYear();
+  const M = String(d.getMonth()+1).padStart(2,"0");
+  const D = String(d.getDate()).padStart(2,"0");
+  return `${Y}-${M}-${D}`;
+}
+/** =================== REVIEW DATE PERMISSIONS (Takvim) =================== **/
+function todayIsoDate(){
+  return fmtEvalLabel(Date.now());
+}
+function toIsoDate(s){
+  const ts = parseEvalDateTs(s);
+  return ts ? fmtEvalLabel(ts) : "";
+}
+function splitCsv(s){
+  return String(s||"")
+    // Split by explicit separators only (comma/semicolon/pipe/newline).
+    // IMPORTANT: Do not split by non-ASCII letters; we must keep Turkish words intact (e.g., "Süpervizör").
+    .split(/\s*[,;|\n]+\s*/g)
+    .map(x=>String(x||"").trim())
+    .filter(Boolean);
+}
+function getCalendarTable(){
+  const preferred = (state.sheetMap?.calendar || SHEETS.calendar);
+  const t0 = state.tables?.[preferred];
+  if(t0 && t0.header) return { name: preferred, table: t0 };
+
+  const keys = Object.keys(state.tables||{});
+  const norm = (s)=>String(s||"").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+
+  // Prefer the sheet that actually contains the calendar permission headers
+  for(const k of keys){
+    const t = state.tables?.[k];
+    if(!t || !t.header) continue;
+    const canon = t.header.map(h=>canonicalHeader(h));
+    if(canon.includes("YorumIzinliRoller") && canon.includes("Tarih")) return { name: k, table: t };
+  }
+  // Fallback: any sheet whose title looks like calendar
+  for(const k of keys){
+    const nk = norm(k);
+    if(nk.includes("takvim") || nk.includes("calendar")) return { name: k, table: state.tables?.[k] };
+  }
+  return { name: preferred, table: null };
+}
+
+function hasAnyReviewCalendarConfig(){
+  const { table } = getCalendarTable();
+  if(!table || !table.header) return false;
+  const canon = table.header.map(h=>canonicalHeader(h));
+  return canon.includes("YorumIzinliRoller") || canon.includes("IzinliRoller") || canon.includes("Rol") || canon.includes("IsGrubu");
+}
+function reviewCalendarRows(){
+  const { table } = getCalendarTable();
+  return (table?.rows || []);
+}
+
+
+// --- Dynamic criteria labels (GunTuru + Role based) ---
+function normTrBasic(x){
+  return String(x||"").trim().toLowerCase()
+    .normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+}
+function gunTuruNormalize(x){
+  const s = normTrBasic(x);
+  if(!s) return "";
+  if(s.startsWith("atolye")) return "ATOLYE";
+  if(s.startsWith("juri")) return "JURI";
+  return "";
+}
+function getGunTuruForDate(isoDate){
+  const wantDate = toIsoDate(isoDate);
+  if(!wantDate) return "";
+  const rows = reviewCalendarRows();
+  const selected = getActiveDonemIds();
+  const useAll = isAllDonemSelected() || selected.length===0;
+  const selSet = new Set(selected.map(x=>String(x||"").trim()).filter(Boolean));
+
+  const rowAppliesToSelection = (r)=>{
+    if(useAll) return true;
+    const rpRaw = String(r.DonemID||r.Donem||"").trim();
+    if(!rpRaw) return true; // empty => all
+    const rpIds = splitCsv(rpRaw);
+    return rpIds.some(id=>selSet.has(String(id||"").trim()));
+  };
+
+  // Prefer: matching date + selected Donem (if any) + GunTuru filled
+  for(const r of rows){
+    const d = toIsoDate(r.Tarih);
+    if(!d || d!==wantDate) continue;
+    if(!rowAppliesToSelection(r)) continue;
+    const gt = String(r.GunTuru||"").trim();
+    if(gt) return gt;
+  }
+  // Fallback: any row on that date
+  for(const r of rows){
+    const d = toIsoDate(r.Tarih);
+    if(!d || d!==wantDate) continue;
+    const gt = String(r.GunTuru||"").trim();
+    if(gt) return gt;
+  }
+  return "";
+}
+function criteriaLabelsForContext(role, isoDate){
+  // Role-based labels always win for Kurumsal İletişim (Hostel Uzmanı) and Süpervizör.
+  const r = roleNormalize(role||"");
+  if(r==="SUPERVISOR") return ["Staja İlgi","Genel Görünüş","Saygı & İletişim"];
+  if(r==="HOSTEL_UZMANI") return ["Giriş - Çıkış","Hostel Kuralları","Hostel Uyum"];
+
+  // GunTuru overrides only for Atölye / Juri days (other roles).
+  const gt = gunTuruNormalize(getGunTuruForDate(isoDate));
+  if(gt==="ATOLYE") return ["Katılım","Odak","İletişim"];
+  if(gt==="JURI") return ["Hazırlık","Hakimiyet","Sunum"];
+
+  return ["Verim","İlgi","Eğitmen"];
+}
+/**
+ * Only-ROLE based permissions:
+ * Takvim sheet must contain:
+ *  - Tarih (date)   (YYYY-MM-DD or TR date)
+ *  - DonemID (optional)
+ *  - YorumIzinliRoller (csv)  e.g. "UZMAN, PROJE_UZMANI" or "ALL"
+ */
+function reviewPermission(role, isoDate){
+  const rNorm = roleNormalize(role||"");
+  const out = { allowed:false, reason:"", allowedDates:[] };
+
+  const raw = String(isoDate||"").trim();
+  if(!raw){
+    out.reason = "Yorum tarihi seçmelisin.";
+    return out;
+  }
+  if(!rNorm){
+    out.reason = "Rol bulunamadı.";
+    return out;
+  }
+  if(!hasAnyReviewCalendarConfig()){
+    const cal = getCalendarTable();
+    const headers = (cal.table?.header||[]).slice(0,12).join(", ");
+    out.reason = "Takvim izin ayarı bulunamadı. Okunan sekme: "+(cal.name||"Takvim")+". Kolonlar: "+(headers||"(boş)");
+    return out;
+  }
+
+  const wantDate = toIsoDate(raw);
+  if(!wantDate){
+    out.reason = "Yorum tarihi geçersiz.";
+    return out;
+  }
+
+  const rows = reviewCalendarRows();
+  const selected = getActiveDonemIds();
+  const useAll = isAllDonemSelected() || selected.length===0;
+  const selSet = new Set(selected.map(x=>String(x||"").trim()).filter(Boolean));
+
+  const rowAppliesToSelection = (r)=>{
+    if(useAll) return true;
+    const rpRaw = String(r.DonemID||r.Donem||"").trim();
+    if(!rpRaw) return true; // empty => all
+    const rpIds = splitCsv(rpRaw);
+    return rpIds.some(id=>selSet.has(String(id||"").trim()));
+  };
+
+  // Collect all allowed dates for this role (preview)
+  const allowedSet = new Set();
+  rows.forEach(r=>{
+    const d = toIsoDate(r.Tarih);
+    if(!d) return;
+
+    if(!rowAppliesToSelection(r)) return;
+
+    const rolesSpec = String(r.YorumIzinliRoller||r.IzinliRoller||r.Rol||r.IsGrubu||"").trim();
+    if(!rolesSpec) return;
+
+    const roles = splitCsv(rolesSpec).map(roleNormalize).filter(Boolean);
+    const isAll = roles.some(x=>["all","hepsi","*","herkes"].includes(String(x||"").toLowerCase()));
+    if(!(isAll || roles.includes(rNorm))) return;
+
+    allowedSet.add(d);
+  });
+  out.allowedDates = Array.from(allowedSet).sort((a,b)=>a.localeCompare(b));
+
+  // Decide for selected date
+  let dateRowFoundAny = false;        // matching date row exists (any Donem)
+  let dateRowFoundForSel = false;     // matching date row exists for selected Donem(s)
+  let rolesEmptyForSel = false;
+  let allow = false;
+  const allowedRolesForSel = new Set();
+
+  rows.forEach(r=>{
+    const d = toIsoDate(r.Tarih);
+    if(!d || d!==wantDate) return;
+
+    dateRowFoundAny = true;
+
+    if(!rowAppliesToSelection(r)) return;
+    dateRowFoundForSel = true;
+
+    const rolesSpec = String(r.YorumIzinliRoller||r.IzinliRoller||r.Rol||r.IsGrubu||"").trim();
+    if(!rolesSpec){ rolesEmptyForSel = true; return; }
+
+    const roles = splitCsv(rolesSpec).map(roleNormalize).filter(Boolean);
+    roles.forEach(x=>allowedRolesForSel.add(x));
+    const isAll = roles.some(x=>["all","hepsi","*","herkes"].includes(String(x||"").toLowerCase()));
+
+    if(isAll || roles.includes(rNorm)) allow = true;
+  });
+
+  out.allowed = allow;
+  if(!allow){
+    if(!dateRowFoundAny){
+      out.reason = "Bu tarih için Takvim'de satır yok.";
+    }else if(!dateRowFoundForSel){
+      out.reason = "Bu tarih seçili dönem için tanımlı değil (Takvim > DonemID).";
+    }else if(rolesEmptyForSel && allowedRolesForSel.size===0){
+      out.reason = "Bu tarih için YorumIzinliRoller boş. Takvim > YorumIzinliRoller hücresini doldur.";
+    }else{
+      const roleTxt = Array.from(allowedRolesForSel).filter(Boolean).join(", ");
+      out.reason = "Bu tarihte rolün için izin yok." + (roleTxt ? (" İzinli roller: "+roleTxt) : "");
+    }
+  }
+  return out;
+}
+
+function buildSeriesForTrainee(tid){
+  // Build per evaluation (not per month) so lines appear even in same month
+  const rows = evalRowsForTrainee(tid).slice();
+  const pts = [];
+
+  rows.forEach(r=>{
+    const ds = String(r.Tarih||"").trim();
+    const ts = parseEvalDateTs(ds);
+    if(!ts) return;
+
+    const v = numVal(r.Kriter1_Puan);
+    const i = numVal(r.Kriter2_Puan);
+    const e = numVal(r.Kriter3_Puan);
+
+    // require 3 criteria to draw consistent lines
+    if(!Number.isFinite(v) || !Number.isFinite(i) || !Number.isFinite(e)) return;
+
+    pts.push({ts, label: fmtEvalLabel(ts), v, i, e});
+  });
+
+  pts.sort((a,b)=>a.ts-b.ts);
+
+  return {
+    labels: pts.map(p=>p.label),
+    v: pts.map(p=>p.v),
+    i: pts.map(p=>p.i),
+    e: pts.map(p=>p.e),
+  };
+}
+
+
+function drawChart(canvas, series){ /* legacy — replaced by buildChartSvg */ }
+function buildChartSvg(series){
+  const W = 560, H = 260;
+  const padL = 36, padR = 16, padT = 20, padB = 48;
+
+  // SVG chart — scales layout
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const minY = 1, maxY = 5;
+  const labels = series?.labels || [];
+  const n = labels.length;
+
+  const xOf = i => padL + (n <= 1 ? plotW / 2 : i * plotW / (n - 1));
+  const yOf = v => padT + plotH - ((v - minY) / (maxY - minY)) * plotH;
+
+  // ── No data ────────────────────────────────────────────────────────────────
+  if(!n){
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#94a3b8" font-size="13" font-family="system-ui,sans-serif">Henüz değerlendirme verisi yok.</text>
+    </svg>`;
+  }
+
+  // ── Grid ───────────────────────────────────────────────────────────────────
+  let gridSvg = "";
+  for(let v = minY; v <= maxY; v++){
+    const yy = yOf(v).toFixed(1);
+    const isMiddle = v === 3;
+    gridSvg += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"
+      stroke="${isMiddle ? "#cbd5e1" : "#e2e8f0"}"
+      stroke-width="${isMiddle ? 1.5 : 1}"
+      stroke-dasharray="${isMiddle ? "4 4" : ""}"/>`;
+    gridSvg += `<text x="${padL - 6}" y="${yy}" text-anchor="end" dominant-baseline="middle"
+      fill="#94a3b8" font-size="11" font-family="system-ui,sans-serif">${v}</text>`;
+  }
+
+  // ── X labels ──────────────────────────────────────────────────────────────
+  let xLabelSvg = "";
+  const step = n <= 6 ? 1 : Math.ceil(n / 6);
+  for(let i = 0; i < n; i++){
+    if(i % step !== 0 && i !== n - 1) continue;
+    const xx = xOf(i).toFixed(1);
+    const yy = (padT + plotH + 6).toFixed(1);
+    xLabelSvg += `<text x="${xx}" y="${yy}" text-anchor="middle" dominant-baseline="hanging"
+      fill="#94a3b8" font-size="10" font-family="system-ui,sans-serif">${escapeHtml(String(labels[i]||""))}</text>`;
+    xLabelSvg += `<line x1="${xx}" y1="${padT + plotH}" x2="${xx}" y2="${padT + plotH + 4}" stroke="#e2e8f0" stroke-width="1"/>`;
+  }
+
+  // ── Series ─────────────────────────────────────────────────────────────────
+  const cfg = [
+    { data: series.v||[], color:"#059669", fill:"#d1fae5", dash:"",      label:"Verim"  , gradId:"gV" },
+    { data: series.i||[], color:"#4f46e5", fill:"#e0e7ff", dash:"",      label:"İlgi"   , gradId:"gI" },
+    { data: series.e||[], color:"#db2777", fill:"#fce7f3", dash:"6 3",   label:"Eğitmen", gradId:"gE" },
+  ];
+
+  let defs = `<defs>`;
+  cfg.forEach(({ fill, gradId, color }) => {
+    defs += `<linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${fill}" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="${fill}" stop-opacity="0"/>
+    </linearGradient>`;
+  });
+  defs += `</defs>`;
+
+  // helper: smooth bezier path from point array
+  function svgPath(pts){
+    if(!pts.length) return "";
+    if(pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
+    let d = `M${pts[0].x},${pts[0].y}`;
+    for(let i = 1; i < pts.length; i++){
+      const prev = pts[i-1], cur = pts[i];
+      const cpx = ((prev.x + cur.x) / 2).toFixed(1);
+      d += ` C${cpx},${prev.y.toFixed(1)} ${cpx},${cur.y.toFixed(1)} ${cur.x.toFixed(1)},${cur.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  let seriesSvg = "";
+  cfg.forEach(({ data, color, gradId, dash }) => {
+    if(!data.length) return;
+    const pts = data.map((v, i) => ({ x: parseFloat(xOf(i).toFixed(1)), y: parseFloat(yOf(v).toFixed(1)) }));
+    const linePath = svgPath(pts);
+    const bottom = (padT + plotH).toFixed(1);
+    const areaPath = linePath + ` L${pts[pts.length-1].x},${bottom} L${pts[0].x},${bottom} Z`;
+
+    // Filled area
+    seriesSvg += `<path d="${areaPath}" fill="url(#${gradId})" opacity="0.55"/>`;
+    // Line
+    seriesSvg += `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="${dash}"/>`;
+    // Points + value labels
+    pts.forEach((pt, idx) => {
+      seriesSvg += `<circle cx="${pt.x}" cy="${pt.y}" r="5" fill="white" stroke="${color}" stroke-width="2.5"/>`;
+      const labelY = (pt.y - 9).toFixed(1);
+      seriesSvg += `<text x="${pt.x}" y="${labelY}" text-anchor="middle" dominant-baseline="auto"
+        fill="${color}" font-size="11" font-weight="700" font-family="system-ui,sans-serif">${data[idx]}</text>`;
+    });
+  });
+
+  // ── Legend (prominent pills) ───────────────────────────────────────────────
+  const legendY = padT + plotH + padB - 16;
+  let legendSvg = "";
+  let lx = padL;
+  cfg.forEach(({ color, fill, label, dash }) => {
+    // pill background
+    legendSvg += `<rect x="${lx}" y="${legendY - 10}" width="92" height="20" rx="10"
+      fill="${fill}" stroke="${color}" stroke-width="1.5"/>`;
+    // dash indicator line inside pill
+    const lineY = legendY;
+    legendSvg += `<line x1="${lx + 8}" y1="${lineY}" x2="${lx + 24}" y2="${lineY}"
+      stroke="${color}" stroke-width="2.5" stroke-dasharray="${dash}" stroke-linecap="round"/>`;
+    // circle dot
+    legendSvg += `<circle cx="${lx + 16}" cy="${lineY}" r="4" fill="white" stroke="${color}" stroke-width="2"/>`;
+    // text
+    legendSvg += `<text x="${lx + 30}" y="${lineY}" dominant-baseline="middle"
+      fill="${color}" font-size="12" font-weight="600" font-family="system-ui,sans-serif">${label}</text>`;
+    lx += 100;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;border-radius:12px;overflow:visible">
+    ${defs}
+    <rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#f8fafc"/>
+    ${gridSvg}
+    ${seriesSvg}
+    ${xLabelSvg}
+    ${legendSvg}
+  </svg>`;
+}
+
+
+function getUserNameByEmail(email){
+  const rows = state.tables[state.sheetMap?.users || SHEETS.users]?.rows || [];
+  const e = String(email||"").toLowerCase();
+  const u = rows.find(r=>String(r.Email||"").toLowerCase()===e);
+  return (u?.AdSoyad || u?.AdSoyadı || u?.AdSoyad || "").trim() || String(email||"");
+}
+function evalHistoryHtml(tid){
+  if(!getActiveDonemIds().length) return `<div class="text-sm text-slate-500 p-3">Dönem seçimi yapınız.</div>`;
+  const rows = evalRowsForTrainee(tid).slice();
+
+  const sortKey = (r)=>{
+    const ds = String(r.Tarih||"").trim();
+    const ts = parseEvalDateTs(ds);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  rows.sort((a,b)=> sortKey(b)-sortKey(a));
+  const limited = rows.slice(0, 80);
+
+  if(!limited.length){
+    return `<div class="text-sm text-slate-500 mt-2">Henüz değerlendirme yok.</div>`;
+  }
+
+  const chip = (label, val, cls)=>{
+    const v = String(val??"").trim();
+    const show = v==="" ? "—" : escapeHtml(v);
+    return `<span class="px-3 py-1 rounded-full text-xs ${cls}">${label}: <b>${show}</b></span>`;
+  };
+
+  const avg3 = (a,b,c)=>{
+    const nums = [a,b,c].map(x=>String(x??"").trim()).filter(x=>x!=="").map(numVal).filter(n=>Number.isFinite(n));
+    if(nums.length!==3) return null;
+    return (nums[0]+nums[1]+nums[2])/3;
+  };
+
+  const cards = limited.map(r=>{
+    const whoEmail = String(r.DegerlendirenUzman||"").trim();
+    const whoName = getUserNameByEmail(whoEmail);
+    const role = String(r.DegerlendirmeTipi||"").trim();
+
+    const ds = String(r.Tarih||"").trim();
+    const ts = parseEvalDateTs(ds);
+    const when = ts ? (fmtEvalLabel(ts) + (ds.match(/\d{2}:\d{2}/) ? (" " + ds.match(/(\d{2}:\d{2})/)[1]) : "")) : ds;
+
+    const v = String(r.Kriter1_Puan??"").trim();
+    const i = String(r.Kriter2_Puan??"").trim();
+    const e = String(r.Kriter3_Puan??"").trim();
+    const l1 = String(r.Kriter1_Baslik||"Verim");
+    const l2 = String(r.Kriter2_Baslik||"İlgi");
+    const l3 = String(r.Kriter3_Baslik||"Eğitmen");
+    const avg = avg3(v,i,e);
+    const note = String(r.GenelNotlar||"").trim();
+    const aiPuan = String(r.AI_Puan ?? r["AI_Puan"] ?? r["AI Puan"] ?? r["AIPuan"] ?? "").trim();
+    // "bekliyor" chip'ini sadece o gün kaydedilen (yeni) yorumlarda göster
+    const isToday = (()=>{ const d=toIsoDate(String(r.Tarih||"")); return d && d===new Date().toISOString().slice(0,10); })();
+    const aiChip = aiPuan
+      ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-violet-50 border border-violet-300 text-violet-700">🤖 AI: <b>${escapeHtml(aiPuan)}</b>/5</span>`
+      : (isToday ? `<span class="px-3 py-1 rounded-full text-xs bg-violet-50 border border-violet-200 text-violet-400">🤖 AI: puanlanıyor…</span>` : "");
+
+    return `
+      <div class="chip rounded-3xl p-4 comment-card">
+        <div class="min-w-0">
+          <div class="font-semibold truncate">${escapeHtml(whoName)} ${whoEmail?`<span class="text-xs text-slate-500 font-normal">(${escapeHtml(whoEmail)})</span>`:""}</div>
+          <div class="text-xs text-slate-500 mt-0.5">
+            ${escapeHtml(when||"")}
+            ${role?` • <span class="px-2 py-1 rounded-full border border-slate-200 bg-white/70">${escapeHtml(roleLabel(roleNormalize(role)))}</span>`:""}
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          ${chip(escapeHtml(l1), v, "bg-emerald-50 border border-emerald-200")}
+          ${chip(escapeHtml(l2), i, "bg-indigo-50 border border-indigo-200")}
+          ${chip(escapeHtml(l3), e, "bg-pink-50 border border-pink-200")}
+          <span class="px-3 py-1 rounded-full text-xs bg-slate-50 border border-slate-200">Ortalama: <b>${avg==null?"—":avg.toFixed(2)}</b></span>
+          ${aiChip}
+        </div>
+
+        ${note?`<div class="text-sm text-slate-700 whitespace-pre-wrap comment-note">${escapeHtml(note)}</div>`:`<div class="text-sm text-slate-400 comment-note">—</div>`}
+      </div>
+    `;
+  }).join("");
+
+  return `<div class="flex flex-col gap-3">${cards}</div>`;
+}
+
+
+
+function globalEvalHistoryHtml(limit=25){
+  if(!getActiveDonemIds().length) return `<div class="text-sm text-slate-500 p-3">Dönem seçimi yapınız.</div>`;
+  const evalSheet = (state.sheetMap?.evals || SHEETS.evals);
+  const all = (state.tables[evalSheet]?.rows || []).slice();
+
+  const sel = getActiveDonemIds();
+  const restrict = sel.length && !isAllDonemSelected();
+
+  if(!sel.length) return [];
+
+  const meaningful = all.filter(r=>{
+    const hasScore = (String(r.Kriter1_Puan||"").trim()!==""
+                   || String(r.Kriter2_Puan||"").trim()!==""
+                   || String(r.Kriter3_Puan||"").trim()!==""
+                   );
+    const hasNote = String(r.GenelNotlar||"").trim()!=="";
+    const hasDate = String(r.Tarih||"").trim()!=="";
+    if(!(hasScore||hasNote||hasDate)) return false;
+
+    if(restrict){
+      const rp = String(r.DonemID||r.Donem||"").trim();
+      if(rp && !sel.includes(rp)) return false;
+      if(!rp && !evalMatchesActivePeriod(r)) return false;
+    }
+    return true;
+  }).sort((a,b)=>String(b.Tarih||"").localeCompare(String(a.Tarih||"")))
+    .slice(0, Math.max(1, Number(limit||25)));
+
+  if(!meaningful.length) return `<div class="text-sm text-slate-500 mt-2">Henüz değerlendirme yok.</div>`;
+
+  const chip = (label, val, cls)=>{
+    const v = String(val??"").trim();
+    const show = v==="" ? "—" : escapeHtml(v);
+    return `<span class="px-3 py-1 rounded-full text-xs ${cls}">${label}: <b>${show}</b></span>`;
+  };
+  const avgOf = (vals)=>{
+    const nums = vals.map(x=>String(x??"").trim()).filter(x=>x!=="").map(numVal).filter(n=>Number.isFinite(n));
+    if(!nums.length) return null;
+    return nums.reduce((a,b)=>a+b,0)/nums.length;
+  };
+
+  return meaningful.map(r=>{
+    const tid = String(r.StajyerID||"").trim();
+    const trainee = (state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(t=>String(t.StajyerID||"")===tid) || {};
+    const traineeName = trainee.AdıSoyadı || trainee.AdıSoyadı || "—";
+
+    const whoName = getUserNameByEmail(r.DegerlendirenUzman);
+    const whoEmail = String(r.DegerlendirenUzman||"").trim();
+    const role = escapeHtml(r.DegerlendirmeTipi||"");
+    const when = escapeHtml(String(r.Tarih||""));
+
+    const v = String(r.Kriter1_Puan??"").trim();
+    const i = String(r.Kriter2_Puan??"").trim();
+    const e = String(r.Kriter3_Puan??"").trim();
+    const l1 = String(r.Kriter1_Baslik||"Verim");
+    const l2 = String(r.Kriter2_Baslik||"İlgi");
+    const l3 = String(r.Kriter3_Baslik||"Eğitmen");
+    const avg = avgOf([v,i,e]);
+const note = String(r.GenelNotlar||"").trim();
+
+    return `
+      <div class="chip rounded-3xl p-4 mt-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(whoName)} ${whoEmail?`<span class="text-xs text-slate-500 font-normal">(${escapeHtml(whoEmail)})</span>`:""}</div>
+            <div class="text-xs text-slate-500 mt-0.5">
+              ${when||""}
+              ${role?`• <span class="px-2 py-1 rounded-full border border-slate-200 bg-white/70">${escapeHtml(roleLabel(roleNormalize(role)))}</span>`:""}
+              • <span class="px-2 py-1 rounded-full border border-slate-200 bg-white/70">Stajyer: <b>${escapeHtml(traineeName)}</b> (${escapeHtml(tid)})</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          ${chip(escapeHtml(l1), v, "bg-emerald-50 border border-emerald-200")}
+          ${chip(escapeHtml(l2), i, "bg-indigo-50 border border-indigo-200")}
+          ${chip(escapeHtml(l3), e, "bg-pink-50 border border-pink-200")}
+          <span class="px-3 py-1 rounded-full text-xs bg-slate-50 border border-slate-200">Ortalama: <b>${avg==null?"—":avg.toFixed(2)}</b></span>
+</div>
+        ${note?`<div class="mt-3 text-sm text-slate-700 clamp2">${escapeHtml(note)}</div>`:""}
+      </div>
+    `;
+  }).join("");
+}
+
+function updateEvalHistoryHost(){
+  const host = document.getElementById("evalHistoryHost");
+  if(!host) return;
+  host.innerHTML = globalEvalHistoryHtml(25);
+}
+
+/** =================== UPSERT (DEGERLENDIRMELER) =================== **/
+function colLetter(n){ let s=""; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26);} return s; }
+
+async function updateTraineeField(tid, fieldName, newValue){
+  const sheet = (state.sheetMap?.trainees || SHEETS.trainees);
+  const t = state.tables?.[sheet];
+  if(!t || !t.header?.length) throw new Error("Stajyerler tablosu okunamadı (header yok).");
+  const row = (t.rows||[]).find(r=>String(r.StajyerID||"")===String(tid||""));
+  if(!row) throw new Error("Stajyer bulunamadı: "+tid);
+  const rowIndex = Number(row.__rowIndex||0);
+  if(!rowIndex) throw new Error("Stajyer satır index bulunamadı.");
+
+  const targetCanon = canonicalHeader(fieldName);
+  const header = t.header.map(h=>String(h||"").trim());
+  const colIdx = header.findIndex(h=>canonicalHeader(h)===targetCanon);
+  if(colIdx<0) throw new Error("Kolon bulunamadı: "+fieldName);
+
+  const absStart = Number(t._colStart||0);
+  const absCol1 = absStart + colIdx + 1; // 1-based
+  const a1 = `${sheet}!${colLetter(absCol1)}${rowIndex}`;
+  await sheetsUpdateRange(a1, [[newValue]]);
+}
+
+async function upsertMyEvaluation(tid, payload){
+  const sheet = (state.sheetMap?.evals || SHEETS.evals);
+  const t = state.tables?.[sheet];
+  if(!t || !t.header || !t.header.length) throw new Error("Değerlendirmeler tablosu okunamadı (header yok).");
+
+  // Build row data (canonical keys) from payload + context
+  const nowIso = new Date().toISOString().slice(0,16).replace("T"," ");
+  const selectedDate = toIsoDate(payload?.tarih ?? payload?.Tarih ?? payload?.date ?? "");
+  const when = selectedDate || nowIso;
+  const keyDate = selectedDate || toIsoDate(when);
+  const row = {};
+  row.StajyerID = String(tid).trim();
+  row.DegerlendirenUzman = String(currentEmail()||"").trim();
+  row.DegerlendirmeTipi = String(state.role||"").trim();
+  row.Tarih = when;
+    const rNorm = roleNormalize(state.role||"");
+  let kd = String(payload?.katilimDurumu ?? payload?.katilim ?? "").trim();
+  if(!kd){
+    if(rNorm==="UZMAN" || rNorm==="PROJE_UZMANI") kd = "Katıldı";
+    else if(rNorm==="HOSTEL_UZMANI") kd = "";
+    else kd = "Yapıldı";
+  }
+  row.KatilimDurumu = kd;
+
+// Titles + scores
+  const ctxLabels = criteriaLabelsForContext(state.role, keyDate);
+  row.Kriter1_Baslik = String(payload?.label1 ?? payload?.Kriter1_Baslik ?? ctxLabels[0] ?? "Verim");
+  row.Kriter2_Baslik = String(payload?.label2 ?? payload?.Kriter2_Baslik ?? ctxLabels[1] ?? "İlgi");
+  row.Kriter3_Baslik = String(payload?.label3 ?? payload?.Kriter3_Baslik ?? ctxLabels[2] ?? "Eğitmen");
+
+  const p1 = payload?.k1 ?? payload?.verim ?? "";
+  const p2 = payload?.k2 ?? payload?.ilgi ?? "";
+  const p3 = payload?.k3 ?? payload?.egitmen ?? "";
+  row.Kriter1_Puan = p1===""? "" : Number(p1);
+  row.Kriter2_Puan = p2===""? "" : Number(p2);
+  row.Kriter3_Puan = p3===""? "" : Number(p3);
+
+  row.GenelNotlar = String(payload?.notlar ?? payload?.yorum ?? payload?.genelNot ?? "").trim();
+  // Optional fields
+
+  // Period (if available)
+  row.DonemID = String(state.activeDonemId||"").trim();
+
+  // Stable IDs / keys
+  // EvalID: deterministic (trainee + evaluator + period) so updates do not create duplicates
+  row.EvalID = `${row.StajyerID}|${row.DegerlendirenUzman}|${row.DonemID}|${keyDate||row.Tarih}`;
+  // TarihKey: easy to filter/sort on sheets side
+  row.TarihKey = `${row.DonemID||""}|${row.StajyerID}|${keyDate||row.Tarih}`;
+
+
+  // Find existing evaluation for this trainee by me
+  const existing = (keyDate? myEvalForDate(tid, keyDate) : null);
+  const rowIndex = existing && Number(existing.__rowIndex);
+
+  // Align to sheet header columns (map payload to the visible table header)
+const header = t.header.map(h=>String(h||"").trim());
+const rowArray = header.map(h=>{
+  const canon = canonicalHeader(h);
+  const v = (row[canon]!==undefined) ? row[canon] : (row[h]!==undefined ? row[h] : "");
+  return v===undefined ? "" : v;
+});
+
+// Table might start after empty columns (e.g., header begins at B/T/etc.). We detect and write from that column.
+const absStart = Number(t._colStart||0);
+const startCol = colLetter(absStart+1);
+const endCol = colLetter(absStart + header.length);
+
+if(rowIndex && rowIndex>=2){
+  // Update existing row (do not touch header)
+  const range = `${sheet}!${startCol}${rowIndex}:${endCol}${rowIndex}`;
+  await sheetsUpdateRange(range, [rowArray]);
+} else {
+  // Append new row safely within the table range
+  await sheetsAppendRow(sheet, rowArray, `${sheet}!${startCol}:${endCol}`);
+}
+
+// Refresh evals so UI updates (green/red and history)
+  await refreshEvals();
+}
+
+/** =================== GROQ AI SCORING =================== **/
+async function callGroqScore(note, v, i, e){
+  if(!note || String(note).trim().length < 5) return null;
+  try{
+    const prompt = `Bir stajyer değerlendirme yorumunu analiz ediyorsun. Aşağıdaki yorum ve uzman puanlarını inceleyerek stajyerin genel performansını 1 ile 5 arasında TAM SAYI olarak puanla. Sadece rakamı yaz, başka hiçbir şey yazma.
+
+Uzman Yorumu: ${String(note).trim()}
+Uzman Puanları: ${v||"?"} / ${i||"?"} / ${e||"?"}
+
+Puan (1-5 arası tam sayı):`;
+
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 5,
+        temperature: 0
+      })
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    const text = String(data?.choices?.[0]?.message?.content || "").trim();
+    const m = text.match(/[1-5]/);
+    return m ? parseInt(m[0]) : null;
+  }catch(e){
+    console.warn("[Groq] callGroqScore error:", e);
+    return null;
+  }
+}
+
+async function groqBackgroundScore(tid, note, v, i, e, rowIndex){
+  if(!GROQ_API_KEY || !note || !rowIndex) return;
+  try{
+    const score = await callGroqScore(note, v, i, e);
+    if(score === null){ console.warn("[Groq] Groq skor döndürmedi."); return; }
+
+    const sheet = state.sheetMap?.evals || SHEETS.evals;
+    let t = state.tables?.[sheet];
+    if(!t || !t.header) return;
+
+    const findAiCol = (tbl) =>
+      (tbl.header||[]).map(h=>String(h||"").trim())
+        .findIndex(h => canonicalHeader(h) === "AI_Puan");
+
+    let colIdx = findAiCol(t);
+
+    // Sütun yoksa otomatik oluştur
+    if(colIdx === -1){
+      const absStart = Number(t._colStart||0);
+      const newPos   = absStart + (t.header||[]).length + 1; // 1-tabanlı
+      const hdrCell  = colLetter(newPos) + "1";
+      console.log(`[Groq] AI_Puan sütunu yok, ${sheet}!${hdrCell} oluşturuluyor...`);
+      await sheetsUpdateRange(`${sheet}!${hdrCell}`, [["AI_Puan"]]);
+      await loadAllTables();
+      t = state.tables?.[sheet];
+      if(!t) return;
+      colIdx = findAiCol(t);
+      if(colIdx === -1){ console.warn("[Groq] Sütun oluşturuldu ama hâlâ bulunamadı."); return; }
+    }
+
+    const absStart  = Number(t._colStart||0);
+    const dataCell  = colLetter(absStart + colIdx + 1) + rowIndex;
+    const range     = `${sheet}!${dataCell}`;
+    await sheetsUpdateRange(range, [[score]]);
+    console.log(`[Groq] AI_Puan=${score} → ${range}`);
+
+    await refreshEvals();
+    // Modal açıksa render() çağırma — kullanıcıyı kesintiye uğratmaz
+    if(!state.modal){
+      render();
+    } else {
+      // Sadece history panelini sessizce güncelle
+      updateEvalHistoryHost();
+    }
+  }catch(err){
+    console.warn("[Groq] groqBackgroundScore error:", err);
+  }
+}
+
+/** =================== BOOT =================== **/
+// --- Role resolution helpers (fixes: first load sometimes shows wrong role until hard refresh) ---
+function sleep(ms){ return new Promise(res=>setTimeout(res, ms)); }
+
+function applyRole(role, displayName){
+  state.role = roleNormalize(role||"");
+  state.displayName = displayName || state.user?.name || "";
+  state.canSeeDashboard = (state.role==="ADMIN" || state.role==="SUPERVISOR" || state.role==="IK");
+  state.canSeeAllReviews = (state.canSeeDashboard || state.role==="PROJE_UZMANI");
+  state.canSeeHR = (state.role==="IK");
+  state.canManageHR = (state.role==="IK" || state.role==="SUPERVISOR" || state.role==="ADMIN");
+}
+
+function roleCacheKey(){
+  const email = cleanEmail(state.user?.email||"");
+  if(!email || !state.spreadsheetId) return "";
+  return `role_cache:${state.spreadsheetId}:${email}`;
+}
+function getCachedRole(){
+  const k = roleCacheKey();
+  if(!k) return "";
+  return localStorage.getItem(k) || "";
+}
+function setCachedRole(role){
+  const k = roleCacheKey();
+  if(!k) return;
+  localStorage.setItem(k, roleNormalize(role||""));
+}
+
+async function loadSingleSheetTable(sheetTitle, kind){
+  if(!sheetTitle) throw new Error("sheetTitle missing");
+  const range = `${sheetTitle}!A1:${(kind==="users"||kind==="hr")?"ZZZ":"ZZ"}`;
+  const res = await sheetsBatchGet([range]);
+  const vr = (res.valueRanges||[])[0] || {};
+  let valuesRaw = vr.values || [[]];
+  if(valuesRaw[0]) valuesRaw[0] = valuesRaw[0].map(h=>String(h||"").trim());
+
+  let trimmed;
+  if(kind==="hr" || kind==="calendar"){
+    const headerRow = (valuesRaw[0]||[]);
+    trimmed = { sliced: valuesRaw, start: 0, end: Math.max(0, headerRow.length-1), width: headerRow.length };
+  }else{
+    trimmed = trimValuesToKnown(valuesRaw, kind);
+  }
+
+  const t = tableFromValues(trimmed.sliced);
+  t._colStart = trimmed.start;
+  t._colEnd = trimmed.end;
+  t._kind = kind;
+  return t;
+}
+
+async function resolveUserRowRobust(){
+  // 1) Use already loaded tables
+  let u = findUserRow();
+  if(u) return u;
+
+  // 2) Reload mapped users sheet once (transient API / partial load)
+  try{
+    const title = state.sheetMap?.users || SHEETS.users;
+    const t = await loadSingleSheetTable(title, "users");
+    state.tables[title] = t;
+  }catch(e){ /* ignore */ }
+  u = findUserRow();
+  if(u) return u;
+
+  // 3) Scan likely tabs by title/header to find the current email
+  const email = cleanEmail(state.user?.email||"");
+  if(!email) return null;
+
+  const titles = (state.sheetTitles||[]);
+  const normName = (s)=>String(s||"").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
+    .replace(/\s+/g," ").trim();
+
+  const likely = titles.filter(t=>{
+    const nt = normName(t);
+    return nt.includes("kullanic") || nt.includes("user");
+  });
+
+  const cand = Array.from(new Set([state.sheetMap?.users, ...likely].filter(Boolean)));
+  for(const title of cand.slice(0, 6)){
+    try{
+      const tt = await loadSingleSheetTable(title, "users");
+      const canon = (tt.header||[]).map(h=>canonicalHeader(h));
+      if(!(canon.includes("Email") && canon.includes("Rol"))) continue;
+
+      const hit = (tt.rows||[]).find(r=>{
+        const cell = (r?.Email ?? r?.Eposta ?? r?.EPosta ?? r?.["E-posta"] ?? r?.["E Posta"] ?? r?.Mail ?? r?.["E-mail"] ?? r?.["E Mail"] ?? "");
+        const list = emailListFromCell(cell);
+        return list.includes(email);
+      });
+      if(hit){
+        state.sheetMap.users = title;
+        state.tables[title] = tt;
+        return hit;
+      }
+    }catch(e){ /* ignore */ }
+  }
+  return null;
+}
+// --- End helpers ---
+
+async function bootAfterLogin(){
+  state.user = await fetchUserProfile();
+
+  const saved=localStorage.getItem("active_dataset");
+  if(saved){
+    try{
+      const j=JSON.parse(saved);
+      if(j?.id){ state.spreadsheetId=j.id; state.datasetName=j.name||"(seçili)"; await bootAfterDataset(true); return; }
+      localStorage.removeItem("active_dataset");
+    }catch{ localStorage.removeItem("active_dataset"); }
+  }
+  routeTo("#select");
+}
+async function bootAfterDataset(silent=false){
+  state.loading=true; render();
+  try{
+    await loadAllTables();
+
+    // If Users table is missing/empty, dataset is likely wrong or the tab wasn't imported.
+    const usersSheet = state.sheetMap?.users || SHEETS.users;
+    const usersRows = state.tables?.[usersSheet]?.rows || [];
+    if(!usersRows.length){
+      console.log("[debug] Users sheet missing/empty:", usersSheet, state.tables?.[usersSheet]);
+      localStorage.removeItem("active_dataset");
+      console.log("[debug] sheetTitles:", state.sheetTitles);
+      setToast("Kullanicilar tablosu boş/okunamadı ("+usersSheet+"). Bu dosyada kullanıcı listesi boş olabilir veya sekme adı değişmiş olabilir. Google Sheet'te Email/Rol satırlarını kontrol et. Sekmeler: "+(state.sheetTitles||[]).slice(0,8).join(", ")+(((state.sheetTitles||[]).length||0)>8?" ...":""), "error");
+      routeTo("#select");
+      return;
+    }
+    // Resolve role robustly (retry + cache). This prevents first-load wrong role until hard refresh.
+    let u = await resolveUserRowRobust();
+
+    if(u){
+      const r = roleNormalize(u.Rol);
+      applyRole(r, u.AdSoyad || state.user?.name || "");
+      setCachedRole(r);
+    }else{
+      const cached = getCachedRole();
+      if(cached){
+        applyRole(cached, state.user?.name || "");
+        console.warn("[warn] Kullanıcı satırı bulunamadı; cached rol kullanıldı:", cached);
+      }else{
+        applyRole("UZMAN", state.user?.name || "");
+        console.log("[debug] Users count:", usersRows.length);
+        console.log("[debug] Sample users emails:", usersRows.slice(0,10).map(r=>rowEmail(r)).filter(Boolean));
+        setToast("Kullanicilar tablosunda bu e-posta yok: "+currentEmail()+" (satır: "+usersRows.length+"). Varsayılan: Uzman", "warn");
+      }
+    }
+// default donem: do NOT auto-select
+    setActiveDonemIds([]);
+    state.donemTouched = false;
+
+    // route
+    routeTo(state.canSeeDashboard ? "#dashboard" : "#review");}catch(e){
+    console.error(e);
+    if(!silent) setToast("Dataset yüklenemedi: "+(e.message||e), "error");
+    routeTo("#select");
+  }finally{
+    state.loading=false; render();
+  }
+}
+
+/** =================== UI =================== **/
+function Topbar(){
+  const name = state.displayName || state.user?.name || "—";
+  const email = state.user?.email || "";
+  const initial = (name||"A").trim().slice(0,1).toUpperCase();
+
+  const dons=donemOptions();
+  if(!state.donemTouched && Array.isArray(state.activeDonemIds) && state.activeDonemIds.length){
+    setActiveDonemIds([]);
+  }
+  // do not auto-select; show \"Seçiniz\" until user chooses
+  const selected = getActiveDonemIds();
+  const allSelected = isAllDonemSelected();
+  const donemSel = `
+    <details class="chip hbtn text-sm outline-none relative" data-donem-box>
+      <summary class="cursor-pointer list-none flex items-center gap-2">
+        <span class="truncate max-w-[220px]">${escapeHtml(activeDonemSummary())}</span>
+        <span class="text-xs text-slate-500 whitespace-nowrap">${allSelected ? "Hepsi" : (selected.length ? (selected.length+" seçili") : "")}</span>
+        <span class="opacity-70">▾</span>
+      </summary>
+      <div class="mt-2 absolute right-0 w-80 max-h-72 overflow-auto p-3 rounded-2xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur scrollbar" style="z-index:200;">
+        <label class="flex items-center gap-2 py-1">
+          <input type="checkbox" data-donemcb data-did="__ALL__" ${allSelected ? "checked" : ""}>
+          <span class="text-sm">Tüm dönemler</span>
+        </label>
+        <div class="h-px bg-slate-200 my-2"></div>
+        ${dons.map(d=>`
+          <label class="flex items-center gap-2 py-1">
+            <input type="checkbox" data-donemcb data-did="${escapeAttr(d.DonemID)}" ${(allSelected || selected.includes(String(d.DonemID))) ? "checked" : ""}>
+            <span class="text-sm">${escapeHtml(d.DonemAdi||d.DonemID)}</span>
+          </label>
+        `).join("")}
+      </div>
+    </details>
+  `;
+
+  return el(`
+    <div id="topbar" class="relative z-30">
+      <div class="px-4 sm:px-6 py-3">
+        <div class="glass rounded-3xl px-4 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-semibold">S</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold leading-tight">Stajyer Değerlendirme Paneli</div>
+            <div class="text-xs text-slate-500 leading-tight truncate">Dataset: ${escapeHtml(state.datasetName||"seçilmedi")}</div>
+          </div>
+
+          <div class="hidden md:flex items-center gap-2">
+            ${state.canSeeDashboard ? `<a href="#dashboard" class="btn hbtn text-sm ${state.route==="#dashboard"?"bg-white":"hover:bg-white"}">Ana Sayfa</a>` : ``}
+            ${(!state.canSeeHR) ? `<a href="#review" class="btn hbtn text-sm ${state.route==="#review"?"bg-white":"hover:bg-white"}">Yorum Yap</a>` : ``}
+            <button class="btn hbtn text-sm hover:bg-white" data-action="changeDataset">Dataset Değiştir</button>
+          </div>
+
+          <div class="hidden lg:flex items-center gap-2">
+            <span class="badge px-3 py-2 rounded-2xl text-sm">Rol: <b>${escapeHtml(roleLabel(state.role)||"—")}</b></span>
+            ${donemSel}
+          </div>
+
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-full bg-white/70 border border-slate-200 flex items-center justify-center font-semibold">${escapeHtml(initial)}</div>
+            <div class="hidden lg:block leading-tight">
+              <div class="text-sm font-semibold">${escapeHtml(name)}</div>
+              <div class="text-xs text-slate-500">${escapeHtml(email)}</div>
+            </div>
+            <button class="btnPrimary hbtn text-sm" data-action="logout">Çıkış</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function EvalHistoryPanel(){
+  return el(`
+    <div class="px-4 sm:px-6 pb-3">
+      <div class="glass ringPastel rounded-3xl p-4">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div>
+            <div class="font-semibold">Değerlendirme Geçmişi</div>
+            <div class="text-xs text-slate-500 mt-0.5">Yorum atan kişinin adı ve e-postası gösterilir.</div>
+          </div>
+          ${(!state.canSeeHR) ? `<a href="#review" class="btn hbtn text-sm hover:bg-white shrink-0">Yorum Yap</a>` : ``}
+        </div>
+        <div id="evalHistoryHost" class="scrollbar" style="max-height:200px;overflow-y:auto;">${globalEvalHistoryHtml(25)}</div>
+      </div>
+    </div>
+  `);
+}
+
+function AuthLanding(){
+  return el(`
+    <div class="max-w-xl mx-auto px-6 py-16">
+      <div class="glass rounded-3xl p-6 text-center fadeIn">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold">S</div>
+        <h1 class="text-2xl font-semibold mt-4">Stajyer Değerlendirme Paneli</h1>
+        <p class="text-slate-600 mt-2">Google ile giriş yap → Drive’daki dönem dosyasını seç → rolüne göre ekran açılır.</p>
+        <button class="btnPrimary mt-6 px-5 py-3 rounded-2xl" data-action="login">Google ile Giriş</button>
+        <div class="text-xs text-slate-500 mt-4">
+          OAuth ayarında Authorized JavaScript origins: <b>http://localhost:8000</b>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function SelectDatasetPage(){
+  return el(`
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      <div class="glass rounded-3xl p-6 fadeIn">
+        <h2 class="text-xl font-semibold">Drive’dan Dönem Dosyası Seç</h2>
+        <p class="text-sm text-slate-600 mt-1">Klasördeki dosyalar listelenir. <b>Sadece Google Sheet</b> seçilebilir.</p>
+        <div class="mt-4 flex flex-col sm:flex-row gap-3">
+          <button class="btnPrimary px-4 py-3 rounded-2xl" data-action="loadDriveList">Dosyaları Listele</button>
+          <input class="flex-1 chip px-4 py-3 rounded-2xl outline-none" data-bind="q" placeholder="Ara (ör. Şubat 2026)" value="${escapeAttr(state.q||"")}"/>
+          <button class="btn px-4 py-3 rounded-2xl" data-action="clearQ">Temizle</button>
+        </div>
+        <div class="mt-4" id="driveListHost"></div>
+        <div class="mt-6 text-xs text-slate-500">Not: xlsx dosyalarını Google Sheet’e çevirmen gerekir.</div>
+      </div>
+    </div>
+  `);
+}
+
+function DashboardPage(){
+  if(!getActiveDonemIds().length){
+    return el(`
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        <div class="glass ringPastel rounded-3xl p-6 text-center">
+          <div class="text-lg font-semibold">Dönem seçimi yapınız</div>
+          <div class="text-sm text-slate-600 mt-1">Üst menüden <b>Dönem</b> seçmeden stajyer kartları ve yorumlar gösterilmez.</div>
+        </div>
+      </div>
+    `);
+  }
+  const trainees = traineeRowsForActiveDonem();
+  const hrOk = !!hrTable();
+  const q=(state.q||"").toLowerCase();
+  const rows = trainees.map(t=>{
+    const tid=String(t.StajyerID||"");
+    const score=dashboardScoreForTrainee(tid);
+const hr = hrOk ? latestHrForTrainee(tid) : null;
+    return {t, tid, score, hr};
+  }).filter(x=>{
+    if(!q) return true;
+    return String(x.t.AdıSoyadı||"").toLowerCase().includes(q) || String(x.tid).toLowerCase().includes(q);
+  }).sort((a,b)=>((b.score??-1)-(a.score??-1)));
+
+  const grid=el(`<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>`);
+  rows.forEach(({t,tid,score,hr})=>{
+    const grpId=String(t.GrupID||"");
+    const grp = (state.tables[state.sheetMap?.groups || SHEETS.groups]?.rows||[]).find(g=>String(g.GrupID||"")===grpId) || {};
+    const grpName = grp.GrupAdi || grpId;
+    const badge = `<span class="px-2 py-1 rounded-full text-xs bg-white/70 border border-slate-200">${escapeHtml(t.Durum||"")}</span>`;
+    const sTxt = score==null ? "—" : score.toFixed(2);
+    const card=el(`
+      <div class="glass rounded-3xl p-4 text-left hover:bg-white transition fadeIn cursor-pointer" data-action="openTrainee" data-tid="${escapeAttr(tid)}">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(t.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-500 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Grup: ${escapeHtml(grpName)} • ${escapeHtml(t.BasvuruAlani||"")}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-slate-500">Uzman Ort.</div>
+            <div class="text-lg font-semibold">${escapeHtml(sTxt)}</div></div>
+        </div>
+<div class="mt-3 flex items-center justify-between gap-2">
+          <div>${badge}</div>
+          <div class="text-xs text-slate-500 truncate">${escapeHtml(t.EgitimDurumu||"")} • ${escapeHtml(t.İkametgahŞehri||"")}</div>
+        </div>
+        <div class="mt-2 flex items-center justify-between gap-2">
+          <div class="text-xs text-slate-500 truncate">
+            İşe Giriş: <span class="font-semibold text-slate-700">${escapeHtml(hr?.IseGirisDurumu || "—")}</span>
+            <span class="text-slate-400">•</span>
+            <span>${escapeHtml(hr?.Departman || "—")}</span>
+          </div>
+          ${state.canManageHR ? `<button class="btn px-3 py-2 rounded-2xl text-xs hover:bg-white" data-action="openHR" data-tid="${escapeAttr(tid)}">Ekle / Güncelle</button>` : ``}
+        </div>
+      </div>
+    `);
+    grid.appendChild(card);
+  });
+
+  return el(`
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div class="flex flex-col lg:flex-row gap-4">
+        <div class="glass ringPastel rounded-3xl p-5 flex-1">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div class="flex-1">
+              <h2 class="text-lg font-semibold">Stajyerler</h2>
+              <div class="text-xs text-slate-500">App Script mantığı • Puan: <b>ortalama</b> bazlı • kart → popup</div>
+            </div>
+            <input class="chip px-4 py-3 rounded-2xl outline-none w-full sm:w-72" data-bind="q" placeholder="Ara (isim/ID)" value="${escapeAttr(state.q||"")}"/>
+            <button class="btn px-4 py-3 rounded-2xl" data-action="clearQ">Temizle</button>
+          </div>
+          <div class="mt-4">${grid.outerHTML}</div>
+        </div>
+
+        <div class="glass ringPastel rounded-3xl p-5 w-full lg:w-[420px]">
+<h2 class="text-lg font-semibold">Filtreler</h2>
+<div class="text-sm text-slate-600 mt-1">App Script’teki gibi: şehir, eğitim, başvuru alanı, durum, hostel, grup.</div>
+${(()=>{
+
+  const base = traineeRowsForActiveDonemRaw();
+  const groups = groupRowsForActiveDonem();
+  const groupLabel = (gid)=>{
+    const g = groups.find(x=>String(x.GrupID||"").trim()===String(gid||"").trim()) || {};
+    const name = String(g.GrupAdi||"").trim();
+    return name ? `${name} (${gid})` : String(gid||"");
+  };
+
+  const opt = (getter)=> uniq(base.map(getter)).sort((a,b)=>String(a||"").localeCompare(String(b||"")));
+  const sehir=opt(t=>t.İkametgahŞehri);
+  const egitim=opt(t=>t.EgitimDurumu);
+  const basvuru=opt(t=>t.BasvuruAlani);
+  const durum=opt(t=>t.Durum);
+  const hostel=opt(t=>t.HostelAdi);
+  const grup=opt(t=>t.GrupID);
+
+  const summary = (sel, labelOf)=>{
+    const arr = normFilterArray(sel);
+    if(arr.length===0) return "Tümü";
+    if(arr.length===1) return (labelOf ? labelOf(arr[0]) : arr[0]);
+    const first = (labelOf ? labelOf(arr[0]) : arr[0]);
+    return `${first} +${arr.length-1}`;
+  };
+
+  const msel = (id, label, values, selected, labelOf)=>`
+    <details class="chip rounded-2xl p-3" data-mfbox="${id}">
+      <summary class="cursor-pointer list-none">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-xs text-slate-500 mb-0.5">${label}</div>
+            <div class="text-sm font-semibold truncate">${escapeHtml(summary(selected, labelOf))}</div>
+          </div>
+          <div class="text-xs text-slate-500 whitespace-nowrap">${normFilterArray(selected).length ? (normFilterArray(selected).length+" seçili") : "Tümü"}</div>
+        </div>
+      </summary>
+      <div class="mt-2 max-h-44 overflow-auto pr-1 scrollbar">
+        <label class="flex items-center gap-2 py-1">
+          <input type="checkbox" data-mf="${id}" data-mv="__ALL__" ${normFilterArray(selected).length ? "" : "checked"}>
+          <span class="text-sm">Tümü</span>
+        </label>
+        ${values.map(v=>`
+          <label class="flex items-center gap-2 py-1">
+            <input type="checkbox" data-mf="${id}" data-mv="${escapeAttr(v)}" ${normFilterArray(selected).includes(String(v)) ? "checked" : ""}>
+            <span class="text-sm">${escapeHtml(labelOf ? labelOf(v) : v)}</span>
+          </label>
+        `).join("")}
+      </div>
+    </details>
+  `;
+
+  return `
+    <div class="mt-4 grid grid-cols-1 gap-3">
+      <div class="chip rounded-2xl p-3">
+        <div class="text-xs text-slate-500 mb-1">Dönem</div>
+        <div class="text-sm font-semibold">${escapeHtml(activeDonemSummary()||"—")}</div>
+      </div>
+
+      ${msel("grup","Grup", grup, getFilterSelections("grup"), groupLabel)}
+      ${msel("durum","Durum", durum, getFilterSelections("durum"))}
+      ${msel("sehir","Şehir", sehir, getFilterSelections("sehir"))}
+      ${msel("egitim","Eğitim", egitim, getFilterSelections("egitim"))}
+      ${msel("basvuru","Başvuru Alanı", basvuru, getFilterSelections("basvuru"))}
+      ${msel("hostel","Hostel", hostel, getFilterSelections("hostel"))}
+
+      <button id="clearFilters" class="btn rounded-2xl px-4 py-2">Filtreleri Temizle</button>
+    </div>
+  `;
+})()}
+
+          <div class="text-sm text-slate-600 mt-1">
+            App Script’teki tüm filtreleri birebir buraya taşıyacağız (şehir, eğitim, başvuru alanı, durum vb.).
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3">
+            <div class="chip rounded-2xl p-4">
+              <div class="text-xs text-slate-500">Dönem</div>
+              <div class="text-lg font-semibold">${escapeHtml(activeDonemSummary()||"—")}</div>
+            </div>
+            <div class="chip rounded-2xl p-4">
+              <div class="text-xs text-slate-500">Not</div>
+              <div class="text-sm text-slate-700">Kullanıcı puanı: Değerlendirmeler tablosundan <b>3 kriter ortalaması</b>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+
+/** =================== HR (İK) =================== **/
+const HR_DEPARTMANLAR = ["Eğitim","İnsan Kaynakları","Kurumsal İletişim","Müşteri İlişkileri","Satış ve Pazarlama","Diğer"];
+const HR_DURUMLAR = ["Mülakata Çağrıldı","Oryantasyon Sürecinde","İşe Girdi","İşten Çıktı"];
+
+function hrSheetName(){ return (state.sheetMap?.hr || SHEETS.hr); }
+function hrTable(){ return state.tables?.[hrSheetName()]; }
+function hrRowsAll(){ return hrTable()?.rows || []; }
+
+async function refreshHr(){
+  const sheet = hrSheetName();
+  const res = await sheetsBatchGet([`${sheet}!A1:ZZZ`]);
+  const vr = (res.valueRanges||[])[0] || {};
+  let valuesRaw = vr.values || [[]];
+  if(valuesRaw[0]) valuesRaw[0] = valuesRaw[0].map(h=>String(h||"").trim());
+  const t = tableFromValues(valuesRaw);
+  t._colStart = 0;
+  t._colEnd = Math.max(0, (valuesRaw[0]||[]).length-1);
+  t._kind = "hr";
+  state.tables = state.tables || {};
+  state.tables[sheet] = t;
+  return t;
+}
+
+function hrRowsForTrainee(tid){
+  const rows = hrRowsAll().filter(r=>String(r.StajyerID||"")===String(tid||""));
+  rows.sort((a,b)=>{
+    const da = parseAnyDate(a.Tarih) || new Date(0);
+    const db = parseAnyDate(b.Tarih) || new Date(0);
+    return db - da;
+  });
+  return rows;
+}
+function latestHrForTrainee(tid){
+  const sel = getActiveDonemIds();
+  const allSel = isAllDonemSelected();
+  const rows = hrRowsAll().filter(r=>String(r.StajyerID||"")===String(tid||""));
+  const filtered = allSel ? rows : rows.filter(r=>sel.includes(String(r.DonemID||"")));
+  filtered.sort((a,b)=>{
+    const da = parseAnyDate(a.Tarih) || new Date(0);
+    const db = parseAnyDate(b.Tarih) || new Date(0);
+    return db - da;
+  });
+  return filtered[0] || null;
+}
+
+async function appendHrEntry(tid, traineeName, departman, durum){
+  const sheet = hrSheetName();
+
+  // Ensure HR table is loaded (but don't rely on headers for write order)
+  try { if(!hrTable() || !hrTable()?.header?.length) await refreshHr(); } catch(e){}
+
+  const nowIso = new Date().toISOString().slice(0,16).replace("T"," ");
+  const donemId = String(state.activeDonemId||"").trim();
+  const stajyerId = String(tid||"").trim();
+  const adSoyad = String(traineeName||"").trim();
+  const dept = String(departman||"").trim();
+  const status = String(durum||"").trim();
+  const ekEmail = String(currentEmail()||"").trim();
+  const ekAd = String(state.displayName||state.user?.name||"").trim();
+  const rol = String(state.role||"").trim();
+
+  // Always write in the canonical column order A:I to avoid header-detection issues
+  const rowArray = [nowIso, donemId, stajyerId, adSoyad, dept, status, ekEmail, ekAd, rol];
+  await sheetsAppendRow(sheet, rowArray, `${sheet}!A:I`);
+
+  // Refresh to show history immediately
+  await refreshHr();
+}
+
+
+function HrPage(){
+  if(!getActiveDonemIds().length){
+    return el(`
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        <div class="glass ringPastel rounded-3xl p-6 text-center">
+          <div class="text-lg font-semibold">Dönem seçimi yapınız</div>
+          <div class="text-sm text-slate-600 mt-1">Üst menüden <b>Dönem</b> seçmeden işe giriş durumu listesi gösterilmez.</div>
+        </div>
+      </div>
+    `);
+  }
+  const sheetOk = !!hrTable();
+  const trainees = traineeRowsForActiveDonemRaw();
+  const q=(state.q||"").toLowerCase();
+
+  const rows = trainees.map(t=>{
+    const tid=String(t.StajyerID||"");
+    const hr = sheetOk ? latestHrForTrainee(tid) : null;
+    return {t, tid, hr};
+  }).filter(x=>{
+    if(!q) return true;
+    return String(x.t.AdıSoyadı||"").toLowerCase().includes(q) || String(x.tid).toLowerCase().includes(q);
+  }).sort((a,b)=>String(a.t.AdıSoyadı||"").localeCompare(String(b.t.AdıSoyadı||"")));
+
+  const grid=el(`<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>`);
+  rows.forEach(({t,tid,hr})=>{
+    const grpId=String(t.GrupID||"");
+    const grp = (state.tables[state.sheetMap?.groups || SHEETS.groups]?.rows||[]).find(g=>String(g.GrupID||"")===grpId) || {};
+    const grpName = grp.GrupAdi || grpId;
+
+    const status = hr?.IseGirisDurumu ? String(hr.IseGirisDurumu) : "—";
+    const dep = hr?.Departman ? String(hr.Departman) : "—";
+    const date = hr?.Tarih ? String(hr.Tarih) : "";
+
+    const badge = `<span class="px-2 py-1 rounded-full text-xs bg-white/70 border border-slate-200">${escapeHtml(status)}</span>`;
+
+    const card=el(`
+      <button class="glass rounded-3xl p-4 text-left hover:bg-white transition fadeIn" data-action="openHR" data-tid="${escapeAttr(tid)}">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(t.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-500 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Grup: ${escapeHtml(grpName)} • ${escapeHtml(t.BasvuruAlani||"")}</div>
+          </div>
+          <div class="text-right min-w-[120px]">
+            <div class="text-xs text-slate-500">Departman</div>
+            <div class="text-sm font-semibold truncate">${escapeHtml(dep)}</div>
+            <div class="text-xs text-slate-500 mt-1">Durum</div>
+            <div class="text-sm font-semibold truncate">${escapeHtml(status)}</div>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between gap-2">
+          <div>${badge}</div>
+          <div class="text-xs text-slate-500 truncate">${escapeHtml(date)}</div>
+        </div>
+      </div>
+    `);
+    grid.appendChild(card);
+  });
+
+  return el(`
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div class="flex flex-col lg:flex-row gap-4">
+        <div class="glass ringPastel rounded-3xl p-5 flex-1">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div class="flex-1">
+              <h2 class="text-lg font-semibold">İşe Giriş Durumu</h2>
+              <div class="text-xs text-slate-500">Kart → departman/durum ekle • Kayıtlar tarihli olarak tutulur • Dönem: <b>${escapeHtml(activeDonemSummary())}</b></div>
+            </div>
+            <input class="chip px-4 py-3 rounded-2xl outline-none w-full sm:w-72" data-bind="q" placeholder="Ara (isim/ID)" value="${escapeAttr(state.q||"")}"/>
+            <button class="btn px-4 py-3 rounded-2xl" data-action="clearQ">Temizle</button>
+          </div>
+
+          ${sheetOk ? "" : `<div class="mt-4 chip rounded-2xl p-4 text-sm text-rose-700 bg-rose-50/70 border border-rose-200">
+            <b>IseGiris</b> sayfası bulunamadı. Excel dosyana <b>IseGiris</b> sheet'i ekle (header ile). Sonra sayfayı yenile.
+          </div>`}
+
+          <div class="mt-4">${grid.outerHTML}</div>
+        </div>
+
+        <div class="glass ringPastel rounded-3xl p-5 w-full lg:w-[420px]">
+          <h2 class="text-lg font-semibold">Bilgi</h2>
+          <div class="text-sm text-slate-600 mt-2">Kaydettiğin her işlem yeni bir satır olarak eklenir. Geçmiş kaybolmaz.</div>
+          <div class="mt-4">
+            <div class="text-sm font-semibold">Departmanlar</div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              ${HR_DEPARTMANLAR.map(x=>`<span class="px-2 py-1 rounded-full text-xs bg-white/70 border border-slate-200">${escapeHtml(x)}</span>`).join("")}
+            </div>
+          </div>
+          <div class="mt-4">
+            <div class="text-sm font-semibold">Durumlar</div>
+            <div class="mt-2 flex flex-col gap-2">
+              ${HR_DURUMLAR.map((x,i)=>`<div class="chip rounded-2xl p-3"><b>${i+1}-</b> ${escapeHtml(x)}</div>`).join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function HrModal(){
+  const tid=state.modal?.tid;
+  const tr=(state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(x=>String(x.StajyerID||"")===String(tid))||{};
+  const history = hrRowsForTrainee(tid);
+  const firstDonem = String(state.activeDonemId||"").trim();
+  const latest = latestHrForTrainee(tid) || history[0] || {};
+  const preDep = String(latest.Departman||"").trim();
+  const preStatus = String(latest.IseGirisDurumu||"").trim();
+
+  return el(`
+    <div class="fixed inset-0 z-50 overlay flex items-center justify-center p-4">
+      <div class="glass rounded-3xl w-full max-w-2xl fadeIn">
+        <div class="p-5 border-b border-slate-200/60 flex items-start justify-between gap-3">
+          <div>
+            <div class="text-xl font-semibold">${escapeHtml(tr.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-500 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Kayıt dönemi: <b>${escapeHtml(firstDonem||"—")}</b> (ilk seçili)</div>
+          </div>
+          <button class="btnPrimary px-4 py-2 rounded-2xl" data-action="closeModal">Kapat</button>
+        </div>
+
+        <div class="p-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select class="chip px-3 py-3 rounded-2xl outline-none" data-bind="hr_dep">
+              <option value="">Departman seç</option>
+              ${HR_DEPARTMANLAR.map(x=>`<option value="${escapeAttr(x)}" ${String(x)===preDep?"selected":""}>${escapeHtml(x)}</option>`).join("")}
+            </select>
+            <select class="chip px-3 py-3 rounded-2xl outline-none" data-bind="hr_status">
+              <option value="">İşe giriş durumu seç</option>
+              ${HR_DURUMLAR.map(x=>`<option value="${escapeAttr(x)}" ${String(x)===preStatus?"selected":""}>${escapeHtml(x)}</option>`).join("")}
+            </select>
+          </div>
+
+          <div class="mt-3 flex items-center justify-end gap-2">
+            <button class="btn px-4 py-3 rounded-2xl" data-action="closeModal">İptal</button>
+            <button class="btnPrimary px-4 py-3 rounded-2xl" data-action="saveHR">Kaydet</button>
+          </div>
+
+          <div class="mt-6">
+            <div class="text-sm font-semibold">Geçmiş</div>
+            <div class="mt-2 max-h-72 overflow-auto scrollbar space-y-2">
+              ${history.length ? history.map(r=>`
+                <div class="chip rounded-2xl p-3">
+                  <div class="text-sm"><b>${escapeHtml(r.IseGirisDurumu||"")}</b> • ${escapeHtml(r.Departman||"")}</div>
+                  <div class="text-xs text-slate-500 mt-1">${escapeHtml(r.Tarih||"")} • ${escapeHtml(r.EkleyenAd||r.EkleyenEmail||"")}${r.DonemID?` • Dönem: ${escapeHtml(r.DonemID)}`:""}</div>
+                </div>
+              `).join("") : `<div class="text-sm text-slate-500">Henüz kayıt yok.</div>`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+}
+function ReviewPage(){
+  if(!getActiveDonemIds().length){
+    return el(`
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        <div class="glass ringPastel rounded-3xl p-6 text-center">
+          <div class="text-lg font-semibold">Dönem seçimi yapınız</div>
+          <div class="text-sm text-slate-600 mt-1">Üst menüden <b>Dönem</b> seçmeden stajyer listesi ve yorumlar gösterilmez.</div>
+        </div>
+      </div>
+    `);
+  }
+  const q=(state.q||"").toLowerCase();
+  const base = state.canSeeDashboard ? traineeRowsForActiveDonem() : traineesAssignedToCurrentUser();
+  const list = base.filter(t=>{
+    if(!q) return true;
+    return String(t.AdıSoyadı||"").toLowerCase().includes(q) || String(t.StajyerID||"").toLowerCase().includes(q);
+  });
+
+  const selDate = String(state.reviewDate||"").trim();
+  const perm = reviewPermission(state.role, selDate);
+  const locked = !perm.allowed;
+
+  const allowedDates = perm.allowedDates || [];
+  const allowedPreview = allowedDates.slice(0,10).join(", ");
+  const allowedMore = allowedDates.length>10;
+
+  const grid=el(`<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>`);
+  list.forEach(t=>{
+    const tid=String(t.StajyerID||"");
+    const done = (!!selDate) ? isDoneForDate(tid, selDate) : false;
+
+    const bg = done ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200";
+    const tag = !selDate ? "Tarih seç" : (locked ? "Kapalı" : (done ? "Yorumlandı" : "Eksik"));
+
+    const disCls = locked ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:bg-white/70";
+    const card=el(`
+      <button class="rounded-3xl border ${bg} p-4 text-left transition fadeIn ${disCls}"
+              ${locked?'disabled':''}
+              data-action="openReview" data-tid="${escapeAttr(tid)}">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(t.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-600 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Grup: ${escapeHtml(t.GrupID||"")}</div>
+          </div>
+          <span class="px-2 py-1 rounded-full text-xs ${done?"bg-emerald-200 text-emerald-900":"bg-rose-200 text-rose-900"}">${escapeHtml(tag)}</span>
+        </div>
+        <div class="text-xs text-slate-500 mt-2">${escapeHtml(t.BasvuruAlani||"")} • ${escapeHtml(t.İkametgahŞehri||"")}</div>
+      </div>
+    `);
+    grid.appendChild(card);
+  });
+
+  const title = state.canSeeDashboard ? "Yorum / Değerlendirme (Tüm stajyerler)" : "Yorum / Değerlendirme (Sana ait stajyerler)";
+  const rawIn = String(state.reviewDateRaw||"").trim();
+  const invalid = !!rawIn && !selDate;
+  const msg = perm.allowed ? "Bu tarih izinli ✅" : (invalid ? "Tarih formatı geçersiz. Örn: 2026-02-23 veya 23.02.2026" : (perm.reason || "Bu tarih izinli değil ❌"));
+  const msgCls = perm.allowed ? "text-emerald-700" : "text-rose-600";
+
+  return el(`
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <div class="glass ringPastel rounded-3xl p-5">
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div class="flex-1">
+              <h2 class="text-lg font-semibold">${title}</h2>
+              <div class="text-xs text-slate-500">
+                Kutular: <span class="font-semibold text-rose-700">kırmızı</span> = eksik, <span class="font-semibold text-emerald-700">yeşil</span> = tamam.
+                Uzman/Kurumsal İletişim sadece kendine atanmış (Gruplar.SorumluUzman) stajyerleri görür.
+              </div>
+            </div>
+            <input class="chip px-4 py-3 rounded-2xl outline-none w-full sm:w-72" data-bind="q" placeholder="Ara (isim/ID)" value="${escapeAttr(state.q||"")}"/>
+            <button class="btn px-4 py-3 rounded-2xl" data-action="clearQ">Temizle</button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="chip rounded-2xl p-4">
+              <div class="text-xs text-slate-500 mb-1">Yorum Tarihi *</div>
+              <div class="relative">
+                <input type="text" class="chip w-full px-3 py-3 pr-12 rounded-2xl outline-none ${(!perm.allowed && selDate)?'ring-2 ring-rose-400':''}"
+                       data-bind="review_date" placeholder="YYYY-MM-DD (örn 2026-02-23) veya 23.02.2026"
+                       value="${escapeAttr((state.reviewDateRaw||selDate||""))}"/>
+                <button class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl hover:bg-slate-100"
+                        data-action="openReviewDatePicker" title="Takvim" aria-label="Takvim">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+                    <path d="M16 2v4M8 2v4M3 10h18"></path>
+                  </svg>
+                </button>
+                <input id="reviewDateHidden" type="date" value="${escapeAttr(selDate||"")}"
+                       class="absolute right-0 top-0 w-[1px] h-[1px] opacity-0" tabindex="-1" aria-hidden="true"/>
+              </div>
+              <div class="text-xs mt-1 ${msgCls}">${escapeHtml(msg)}</div>
+              ${allowedDates.length ? `<div class="text-[11px] text-slate-500 mt-1">İzinli günler (${allowedDates.length}): ${escapeHtml(allowedPreview)}${allowedMore?" …":""}</div>` : ``}
+            </div>
+            <div class="chip rounded-2xl p-4">
+              <div class="text-xs text-slate-500">Kural</div>
+              <div class="text-sm text-slate-700 mt-1">Tarih seçmeden veya izinli olmayan bir tarih seçiliyken <b>stajyer kartlarına tıklanamaz</b>.</div>
+              <div class="text-[11px] text-slate-500 mt-2">İzinler: <b>Takvim</b> sekmesindeki <b>YorumIzinliRoller</b> kolonundan okunur.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4">${grid.outerHTML}</div>
+      </div>
+    </div>
+  `);
+}
+
+function TraineeModal(){
+  const tid=state.modal?.tid;
+  const t=(state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(x=>String(x.StajyerID||"")===String(tid))||{};
+  const grp=(state.tables[state.sheetMap?.groups || SHEETS.groups]?.rows||[]).find(g=>String(g.GrupID||"")===String(t.GrupID||""))||{};
+  const score=dashboardScoreForTrainee(tid);
+  const series=buildSeriesForTrainee(tid);
+
+  return el(`
+    <div class="fixed inset-0 z-50 overlay flex items-center justify-center p-4">
+      <div class="glass rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-auto scrollbar fadeIn">
+        <div class="p-5 border-b border-slate-200/60 flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="text-xl font-semibold truncate">${escapeHtml(t.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-500 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Grup: ${escapeHtml(grp.GrupAdi||t.GrupID||"—")} • Durum: ${escapeHtml(t.Durum||"")}</div>
+            ${(()=>{
+  const c = criterionAverages(tid);
+  const fmt=x=> (x==null||!Number.isFinite(x))?"—":x.toFixed(2);
+  return `<div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+      <span>Uzman Ort.: <b>${fmt(c.humanAvg)}</b></span>
+      <span class="text-violet-600 font-semibold">🤖 AI Ort.: <b>${fmt(c.aiAvg)}</b></span>
+      <span class="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">${escapeHtml((c.labels&&c.labels[0])||"Kriter 1")}: <b>${fmt(c.vAvg)}</b></span>
+      <span class="bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">${escapeHtml((c.labels&&c.labels[1])||"Kriter 2")}: <b>${fmt(c.iAvg)}</b></span>
+      <span class="bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full">${escapeHtml((c.labels&&c.labels[2])||"Kriter 3")}: <b>${fmt(c.eAvg)}</b></span>
+    </div>`;
+})()}
+          </div>
+          <button class="btnPrimary px-4 py-2 rounded-2xl shrink-0" data-action="closeModal">Kapat</button>
+        </div>
+
+        <div class="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="glass ringPastel rounded-3xl p-4">
+            <div class="font-semibold">Profil Bilgileri</div>
+            <div class="mt-3 grid grid-cols-1 gap-2 text-sm">
+              ${infoRow("Email", t.MailAdresi)}
+              ${infoRow("Telefon", t.TelefonNumarası)}
+              ${infoRow("Şehir", t.İkametgahŞehri)}
+              ${infoRow("Eğitim", t.EgitimDurumu)}
+              ${infoRow("İngilizce", t.İngilizceSeviyesi)}
+              ${infoRow("Proje Konusu", t.ProjeKonusu)}
+              ${infoRow("Hostel", t.HostelAdi)}
+              ${linkRow("LinkedIn", t.LinkedInProfili)}
+              ${linkRow("CV", t.CVLinki)}
+              ${linkRow("Video", t.TanitimVideosuLinki)}
+            </div>
+          </div>
+
+          <div class="glass ringPastel rounded-3xl p-4">
+            <div class="font-semibold mb-1">Performans Grafiği</div>
+            <div id="chartHost" class="mt-2 w-full"></div>
+          </div>
+        </div>
+
+        ${(()=>{
+          const ok = !!hrTable();
+          if(!ok) return ``;
+          const latest = latestHrForTrainee(tid) || {};
+          const history = hrRowsForTrainee(tid).slice(0,3);
+          const can = !!state.canManageHR;
+          const fmt = (r)=>`<div class="chip rounded-2xl p-3">
+              <div class="text-sm"><b>${escapeHtml(r.IseGirisDurumu||"")}</b> • ${escapeHtml(r.Departman||"")}</div>
+              <div class="text-xs text-slate-500 mt-1">${escapeHtml(r.Tarih||"")}${r.DonemID?` • Dönem: ${escapeHtml(r.DonemID)}`:""}</div>
+            </div>`;
+          return `
+            <div class="px-5">
+              <div class="glass ringPastel rounded-3xl p-4">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <div class="font-semibold">İşe Giriş Durumu</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Son kayıt: <b>${escapeHtml(latest.IseGirisDurumu||"—")}</b> • ${escapeHtml(latest.Departman||"—")} ${latest.Tarih?`• ${escapeHtml(latest.Tarih)}`:""}</div>
+                  </div>
+                  ${can ? `<button class="btn px-3 py-2 rounded-2xl text-xs hover:bg-white" data-action="openHR" data-tid="${escapeAttr(tid)}">Ekle / Güncelle</button>` : ``}
+                </div>
+                <div class="mt-3 space-y-2">
+                  ${history.length ? history.map(fmt).join("") : `<div class="text-sm text-slate-500">Henüz kayıt yok.</div>`}
+                </div>
+              </div>
+            </div>
+          `;
+        })()}
+
+        <div class="px-5 pb-5">
+          <div class="glass ringPastel rounded-3xl p-4">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="font-semibold">Yorumlar</div>
+                <div class="text-xs text-slate-500 mt-0.5">Yorumu yapan kişi • puanlar • tarih</div>
+              </div>
+            </div>
+            <div class="mt-2 scrollbar comments-container">${evalHistoryHtml(tid)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  function infoRow(k,v){ return `<div class="flex items-start justify-between gap-3 rounded-2xl px-3 py-2 bg-white/70 border border-slate-200"><span class="text-sm text-slate-600 shrink-0">${escapeHtml(k)}</span><span class="text-sm font-semibold text-slate-900 text-right break-words">${escapeHtml(v||"—")}</span></div>`; }
+  function linkRow(k,v){
+    if(!v) return `<div class="chip rounded-2xl p-3"><span class="text-slate-500">${escapeHtml(k)}:</span> <b>—</b></div>`;
+    return `<div class="chip rounded-2xl p-3"><span class="text-slate-500">${escapeHtml(k)}:</span> <a class="text-slate-900 underline" target="_blank" href="${escapeAttr(v)}">${escapeHtml(v)}</a></div>`;
+  }
+}
+
+function ReviewModal(){
+  const tid=state.modal?.tid;
+  const t=(state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(x=>String(x.StajyerID||"")===String(tid))||{};
+
+  const selDate = String(state.reviewDate||"").trim();
+  const perm = reviewPermission(state.role, selDate);
+  const formLocked = state.reviewSaving || !perm.allowed;
+
+  const ex = myEvalForTraineeDate(tid, selDate) || {};
+  const preV = ex.Kriter1_Puan || "";
+  const preI = ex.Kriter2_Puan || "";
+  const preE = ex.Kriter3_Puan || "";
+  const preNote = ex.GenelNotlar || "";
+  let preAtt = ex.KatilimDurumu || "Katıldı";
+  // Backward compatibility: older rows used "Yapıldı"
+  if(String(preAtt).trim()==="Yapıldı") preAtt = "Katıldı";
+  preAtt = (String(preAtt).toLowerCase().includes("katilma") || String(preAtt).toLowerCase().includes("katılma")) ? "Katılmadı" :
+           (String(preAtt).toLowerCase().includes("katildi") || String(preAtt).toLowerCase().includes("katıldı")) ? "Katıldı" : preAtt;
+
+  
+  const ctxLabels = criteriaLabelsForContext(state.role, selDate);
+  const l1 = String(ex.Kriter1_Baslik || ctxLabels[0] || "Kriter 1");
+  const l2 = String(ex.Kriter2_Baslik || ctxLabels[1] || "Kriter 2");
+  const l3 = String(ex.Kriter3_Baslik || ctxLabels[2] || "Kriter 3");
+
+  // Hostel selection (Kurumsal İletişim)
+  const preHostelRaw = String(ex.KatilimDurumu || "").trim();
+  const preHostel = (preHostelRaw==="San Art" || preHostelRaw==="Charlie") ? preHostelRaw : "";
+const permMsg = perm.allowed ? `Seçili tarih izinli ✅ (${selDate})` : (perm.reason||"Bu tarihte izin yok ❌");
+  const permMsgCls = perm.allowed ? "text-emerald-700" : "text-rose-600";
+
+  return el(`
+    <div class="fixed inset-0 z-50 overlay flex items-center justify-center p-4">
+      <div class="glass rounded-3xl w-full max-w-2xl fadeIn">
+        <div class="p-5 border-b border-slate-200/60 flex items-start justify-between gap-3">
+          <div>
+            <div class="text-xl font-semibold">${escapeHtml(t.AdıSoyadı||"")}</div>
+            <div class="text-xs text-slate-500 mt-0.5">ID: <b>${escapeHtml(tid)}</b> • Değerlendirme Tipi: <b>${escapeHtml(roleLabel(state.role)||"")}</b></div>
+            <div class="text-xs mt-1 ${permMsgCls}">${escapeHtml(permMsg)}</div>
+          </div>
+          <button class="btnPrimary px-4 py-2 rounded-2xl ${state.reviewSaving?'opacity-60 pointer-events-none':''}" ${state.reviewSaving?'disabled':''} data-action="closeModal">Kapat</button>
+        </div>
+        <div class="p-5">
+          <div class="text-sm text-slate-600">Tek seferde puan + yorum girip kaydet. Daha önce aynı tarihte kaydettiysen günceller.</div>
+
+          ${state.role==="PROJE_UZMANI" ? `
+            <div class="mt-3">
+              <div class="text-xs text-slate-500 mb-1">Proje Konusu (editlenebilir)</div>
+              <textarea class="chip w-full px-3 py-3 rounded-2xl outline-none" rows="2" ${formLocked?'disabled':''} data-bind="rev_project" placeholder="Proje Konusu">${escapeHtml(t.ProjeKonusu||"")}</textarea>
+              <div class="text-[11px] text-slate-500 mt-1">Not: Bu alan sadece Proje Uzmanı rolünde güncellenir.</div>
+            </div>
+          ` : ``}
+
+          ${(state.role==="UZMAN"||state.role==="PROJE_UZMANI") ? `
+            <div class="mt-3">
+              <div class="text-xs text-slate-500 mb-1">Katılım Durumu *</div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="cursor-pointer">
+                  <input type="radio" name="rev_att" value="Katıldı" class="peer hidden" ${formLocked?'disabled':''} ${preAtt==="Katıldı" ? "checked" : ""}/>
+                  <div class="chip px-3 py-3 rounded-2xl text-center border border-slate-200 bg-white peer-checked:bg-slate-900 peer-checked:text-white">Katıldı</div>
+                </label>
+                <label class="cursor-pointer">
+                  <input type="radio" name="rev_att" value="Katılmadı" class="peer hidden" ${formLocked?'disabled':''} ${preAtt==="Katılmadı" ? "checked" : ""}/>
+                  <div class="chip px-3 py-3 rounded-2xl text-center border border-slate-200 bg-white peer-checked:bg-slate-900 peer-checked:text-white">Katılmadı</div>
+                </label>
+              </div>
+              ${state.revErrors?.att?(`<div class="text-rose-600 text-xs mt-1">${escapeHtml(state.revErrors.att)}</div>`):""}
+            </div>
+          ` : ``}
+
+          ${(state.role==="HOSTEL_UZMANI") ? `
+            <div class="mt-3">
+              <div class="text-xs text-slate-500 mb-1">Hostel Adı *</div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="cursor-pointer">
+                  <input type="radio" name="rev_hostel" value="San Art" class="peer hidden" ${formLocked?'disabled':''} ${preHostel==="San Art" ? "checked" : ""}/>
+                  <div class="chip px-3 py-3 rounded-2xl text-center border border-slate-200 bg-white peer-checked:bg-slate-900 peer-checked:text-white">San Art</div>
+                </label>
+                <label class="cursor-pointer">
+                  <input type="radio" name="rev_hostel" value="Charlie" class="peer hidden" ${formLocked?'disabled':''} ${preHostel==="Charlie" ? "checked" : ""}/>
+                  <div class="chip px-3 py-3 rounded-2xl text-center border border-slate-200 bg-white peer-checked:bg-slate-900 peer-checked:text-white">Charlie</div>
+                </label>
+              </div>
+              ${state.revErrors?.hostel?(`<div class="text-rose-600 text-xs mt-1">${escapeHtml(state.revErrors.hostel)}</div>`):""}
+            </div>
+          ` : ``}
+
+
+          <div class="mt-4 grid grid-cols-3 gap-2">
+            <input type="number" min="1" max="5" step="1" class="chip px-3 py-3 rounded-2xl outline-none ${state.revErrors?.verim?'ring-2 ring-rose-400':''}" ${formLocked?'disabled':''} data-bind="rev_v" value="${escapeAttr(preV)}" placeholder="${escapeAttr(l1)} (1-5)"/>
+            <input type="number" min="1" max="5" step="1" class="chip px-3 py-3 rounded-2xl outline-none ${state.revErrors?.ilgi?'ring-2 ring-rose-400':''}" ${formLocked?'disabled':''} data-bind="rev_i" value="${escapeAttr(preI)}" placeholder="${escapeAttr(l2)} (1-5)"/>
+            <input type="number" min="1" max="5" step="1" class="chip px-3 py-3 rounded-2xl outline-none ${state.revErrors?.egitmen?'ring-2 ring-rose-400':''}" ${formLocked?'disabled':''} data-bind="rev_e" value="${escapeAttr(preE)}" placeholder="${escapeAttr(l3)} (1-5)"/>
+          </div>
+          ${(()=>{ const x=state.revErrors||{}; const msg=(x.verim||x.ilgi||x.egitmen); return msg?(`<div class="text-rose-600 text-xs mt-1">${escapeHtml(msg)}</div>`):""; })()}
+
+          <textarea class="chip w-full mt-2 px-3 py-3 rounded-2xl outline-none ${state.revErrors?.yorum?'ring-2 ring-rose-400':''}" rows="6" ${formLocked?'disabled':''}
+                    data-bind="rev_note"
+                    placeholder="${(state.role==='UZMAN'||state.role==='HOSTEL_UZMANI')?'Yorum (zorunlu)':'Yorum / Genel Notlar'}">${escapeHtml(preNote)}</textarea>
+          ${state.revErrors?.yorum?(`<div class="text-rose-600 text-xs mt-1">${escapeHtml(state.revErrors.yorum)}</div>`):""}
+
+          ${((["UZMAN","PROJE_UZMANI","HOSTEL_UZMANI","SUPERVISOR"].includes(state.role)) ? `<div class="text-xs text-slate-500 mt-2">Not: Bu rolde puan + yorum zorunludur.</div>` : `<div class="text-xs text-slate-500 mt-2">İstersen sadece puan veya yorum ekleyebilirsin.</div>`)}
+
+          <button class="btnPrimary w-full mt-3 px-4 py-3 rounded-2xl ${(state.reviewSaving||!perm.allowed)?'opacity-70 pointer-events-none':''}" ${(state.reviewSaving||!perm.allowed)?'disabled':''} data-action="saveReview">${state.reviewSaving?'Kaydediliyor...':(perm.allowed?'Kaydet':'Bu tarihte kapalı')}</button>
+</div>
+      </div>
+    </div>
+  `);
+}
+
+/** =================== APP RENDER =================== **/
+function App(){
+  const root=el(`<div class="min-h-screen"></div>`);
+  if(!state.token){ root.appendChild(AuthLanding()); return root; }
+  root.appendChild(Topbar());
+  if(state.spreadsheetId && !state.loading) root.appendChild(EvalHistoryPanel());
+
+  if(state.loading){
+    root.appendChild(el(`<div class="max-w-4xl mx-auto px-6 py-10 text-slate-600">Yükleniyor...</div>`));
+    return root;
+  }
+
+  if(!state.spreadsheetId){
+    root.appendChild(SelectDatasetPage());
+  }else{
+    let page=null;
+    if(state.route==="#dashboard" && state.canSeeDashboard) page=DashboardPage();
+    else if(state.route==="#review" && !state.canSeeHR) page=ReviewPage();
+    else if(state.route==="#select") page=SelectDatasetPage();
+    else page = state.canSeeDashboard ? DashboardPage() : ReviewPage();
+    root.appendChild(page);
+  }
+
+  if(state.toast){
+    const t=state.toast;
+    const bg = t.kind==="error" ? "bg-rose-600" : (t.kind==="warn"?"bg-amber-500":"bg-emerald-600");
+    root.appendChild(el(`<div class="fixed bottom-4 left-1/2 -translate-x-1/2 ${bg} text-white px-4 py-3 rounded-2xl shadow-lg z-50">${escapeHtml(t.msg)}</div>`));
+  }
+
+  if(state.modal?.type==="trainee"){
+    root.appendChild(TraineeModal());
+    setTimeout(()=>{
+      const host=document.getElementById("chartHost");
+      if(!host) return;
+      const series=buildSeriesForTrainee(state.modal.tid);
+      host.innerHTML = buildChartSvg(series);
+    }, 40);
+  }
+  if(state.modal?.type==="review"){
+    root.appendChild(ReviewModal());
+  }
+  if(state.modal?.type==="hr"){
+    root.appendChild(HrModal());
+  }
+
+  return root;
+}
+
+
+
+
+function _cssEscape(s){
+  s = String(s||"");
+  try{ if(window.CSS && CSS.escape) return CSS.escape(s); }catch(e){}
+  // fallback: escape quotes/backslashes
+  return s.replace(/\\/g,"\\\\").replace(/"/g,'\\"');
+}
+function captureUiSnapshot(){
+  const snap = { open: [] };
+  try{
+    const d = document.querySelector('details[data-donem-box]');
+    if(d && d.open) snap.open.push("donem");
+    document.querySelectorAll('details[data-mfbox]').forEach(x=>{
+      if(x.open) snap.open.push("mf:"+String(x.dataset.mfbox||""));
+    });
+  }catch(e){}
+  return snap;
+}
+function restoreUiSnapshot(snap){
+  if(!snap) return;
+  try{
+    (snap.open||[]).forEach(k=>{
+      if(k==="donem"){
+        const d = document.querySelector('details[data-donem-box]');
+        if(d) d.open = true;
+      }else if(k.startsWith("mf:")){
+        const id = k.slice(3);
+        const d = document.querySelector('details[data-mfbox="'+_cssEscape(id)+'"]');
+        if(d) d.open = true;
+      }
+    });
+  }catch(e){}
+}
+
+function render(){
+  const app=document.getElementById("app");
+  if(!app) return;
+  const snap = captureUiSnapshot();
+  app.innerHTML="";
+  app.appendChild(App());
+  wire();
+  wireFilters();
+  updateEvalHistoryHost();
+  restoreUiSnapshot(snap);
+}
+
+function openTraineeModal(tid){ state.modal={type:"trainee", tid}; render(); }
+function canReviewTrainee(tid){
+  if(state.canSeeDashboard || state.canSeeAllReviews) return true;
+  const allowed = new Set(traineesAssignedToCurrentUser().map(t=>String(t.StajyerID||"")));
+  return allowed.has(String(tid));
+}
+function openReviewModal(tid){
+  if(state.canSeeHR){
+    setToast("İK rolü yorum yapamaz.", "warn");
+    return;
+  }
+  if(!canReviewTrainee(tid)){
+    setToast("Bu stajyer sana atanmadı. Yorum yapamazsın.", "warn");
+    return;
+  }
+  state.reviewSaving=false;
+  state.revErrors=null;
+
+
+  const selDate = String(state.reviewDate||"").trim();
+  const perm = reviewPermission(state.role, selDate);
+  if(!perm.allowed){
+    setToast(perm.reason || "Önce izinli bir tarih seçmelisin.", "warn");
+    return;
+  }
+
+  state.modal={type:"review", tid}; render();
+}
+
+
+function openHrModal(tid){
+  if(!state.canManageHR){
+    setToast("Bu işlem sadece İK / Süpervizör / Admin içindir.", "warn");
+    return;
+  }
+  state.modal={type:"hr", tid}; render();
+}
+
+function closeModal(){
+  state.reviewSaving=false;
+  state.modal=null; render();
+}
+
+function wireFilters(){
+  // Legacy single-select support (if any remains)
+  document.querySelectorAll('select[data-f]').forEach(sel=>{
+    const key=sel.getAttribute('data-f');
+    if(key==="donem"){ sel.disabled=true; return; }
+    sel.onchange=()=>{
+      state.filters = state.filters || {};
+      state.filters[key]=sel.value;
+      render();
+    };
+  });
+
+  // Multi-select checkboxes (new)
+  document.querySelectorAll('input[type="checkbox"][data-mf][data-mv]').forEach(cb=>{
+    const key = cb.dataset.mf;
+    const val = cb.dataset.mv;
+
+    cb.onchange = ()=>{
+      state.filters = state.filters || {};
+      let arr = normFilterArray(state.filters[key]);
+
+      if(val === "__ALL__"){
+        arr = [];
+      }else{
+        if(cb.checked){
+          if(!arr.includes(val)) arr.push(val);
+        }else{
+          arr = arr.filter(x=>x!==val);
+        }
+      }
+
+      state.filters[key] = arr;
+      render();
+    };
+  });
+
+  const clr=document.getElementById("clearFilters");
+  if(clr) clr.onclick=()=>{
+    state.filters = { sehir:[], egitim:[], basvuru:[], durum:[], hostel:[], grup:[] };
+    render();
+  };
+}
+
+function wire(){
+  // data-action buttons (delegated)
+  document.querySelectorAll("[data-action]").forEach(btn=>{
+    btn.addEventListener("click", async (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const act = btn.dataset.action;
+      const tid = btn.dataset.tid || btn.getAttribute("data-tid") || "";
+      try{
+        if(act==="login") return login();
+        if(act==="logout") return logout();
+        if(act==="changeDataset"){
+          localStorage.removeItem("active_dataset");
+          state.spreadsheetId=null; state.datasetName=null; state.tables={}; state.sheetMap=null;
+          routeTo("#select");
+          setToast("Dataset seçimine dönüldü.", "ok");
+          return;
+        }
+        if(act==="loadDriveList") return await loadDriveList();
+        if(act==="clearQ"){ state.q=""; render(); return; }
+        if(act==="openTrainee"){ openTraineeModal(tid); return; }
+        if(act==="openReview"){ openReviewModal(tid); return; }
+        if(act==="openHR"){ openHrModal(tid); return; }
+        if(act==="closeModal"){ closeModal(); return; }
+        if(act==="saveHR"){
+          if(!state.canManageHR) { setToast("Bu işlem sadece İK / Süpervizör / Admin içindir.", "warn"); return; }
+          const dep=document.querySelector('[data-bind="hr_dep"]')?.value?.trim();
+          const durum=document.querySelector('[data-bind="hr_status"]')?.value?.trim();
+          if(!dep || !durum){ setToast("Departman ve durum seçmelisin.", "warn"); return; }
+          if(!getActiveDonemIds().length){ setToast("Önce dönem seçiniz.", "warn"); return; }
+          try{
+            const tr=(state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(x=>String(x.StajyerID||"")===String(state.modal.tid))||{};
+            await appendHrEntry(state.modal.tid, tr.AdıSoyadı||"", dep, durum);
+            await refreshHr();
+            setToast("Kaydedildi ✅", "ok");
+            state.modal={type:"hr", tid: state.modal.tid};
+            render();
+            return;
+          }catch(err){ throw err; }
+        }
+        if(act==="saveReview"){
+          if(state.reviewSaving) return;
+
+          const vEl=document.querySelector('[data-bind="rev_v"]');
+          const iEl=document.querySelector('[data-bind="rev_i"]');
+          const eEl=document.querySelector('[data-bind="rev_e"]');
+          const noteEl=document.querySelector('[data-bind="rev_note"]');
+
+          const v=(vEl?.value||"").trim();
+          const i=(iEl?.value||"").trim();
+          const e=(eEl?.value||"").trim();
+          const note=(noteEl?.value||"").trim();
+          const proj=(document.querySelector('[data-bind="rev_project"]')?.value||"").trim();
+          const selDate = String(state.reviewDate||"").trim();
+          if(!selDate){
+            setToast("Yorum tarihi seçmelisin.", "warn");
+            return;
+          }
+          const perm0 = reviewPermission(state.role, selDate);
+          if(!perm0.allowed){
+            render();
+            setToast(perm0.reason || "Bu tarihte yorum yapamazsın.", "warn");
+            return;
+          }
+
+          if(!getActiveDonemIds().length){
+            setToast("Önce dönem seçiniz.", "warn");
+            return;
+          }
+
+
+
+          const isStrict = ["UZMAN","PROJE_UZMANI","HOSTEL_UZMANI","SUPERVISOR"].includes(state.role);
+const att = (document.querySelector('input[name="rev_att"]:checked')?.value||"").trim();
+          const hostel = (document.querySelector('input[name="rev_hostel"]:checked')?.value||"").trim();
+          const katilimOrHostel = (state.role==="HOSTEL_UZMANI") ? hostel : att;
+
+          const ex = myEvalForTraineeDate(state.modal.tid, selDate) || {};
+          const ctxLabels = criteriaLabelsForContext(state.role, selDate);
+          const l1 = String(ex.Kriter1_Baslik || ctxLabels[0] || "Kriter 1");
+          const l2 = String(ex.Kriter2_Baslik || ctxLabels[1] || "Kriter 2");
+          const l3 = String(ex.Kriter3_Baslik || ctxLabels[2] || "Kriter 3");
+
+// reset previous errors on every save attempt
+          state.revErrors = null;
+
+          const errors = {};
+          const parseScore=(raw, el, key, label)=>{
+            const s=String(raw||"").trim();
+            if(!s){ errors[key]=label+" puanı zorunlu."; return ""; }
+            const n=Number(s.replace(",", "."));
+            if(!Number.isFinite(n) || !Number.isInteger(n)){ errors[key]=label+" 1-5 arası tam sayı olmalı."; return ""; }
+            if(n<1 || n>5){
+              errors[key]=label+" 1-5 arası olmalı. (Girilen: "+s+")";
+              return "";
+            }
+            return n;
+          };
+
+          const parseOptionalScore=(raw, el, key, label)=>{
+            const s=String(raw||"").trim();
+            if(!s) return "";
+            const n=Number(s.replace(",", "."));
+            if(!Number.isFinite(n) || !Number.isInteger(n) || n<1 || n>5){
+              errors[key]=label+" 1-5 arası tam sayı olmalı. (Girilen: "+s+")";
+              return "";
+            }
+            return n;
+          };
+          const payload = { verim:"", ilgi:"", egitmen:"", yorum:note, katilimDurumu: katilimOrHostel, tarih: selDate, label1:l1, label2:l2, label3:l3 };
+
+          if(isStrict){
+            payload.verim = parseScore(v, vEl, "verim", l1);
+            payload.ilgi = parseScore(i, iEl, "ilgi", l2);
+            payload.egitmen = parseScore(e, eEl, "egitmen", l3);            if(state.role==="UZMAN" || state.role==="PROJE_UZMANI"){
+              if(!att) errors.att = "Katılım durumu seçmelisin (Katıldı / Katılmadı).";
+            }
+            if(state.role==="HOSTEL_UZMANI"){
+              if(!hostel) errors.hostel = "Hostel seçmelisin (San Art / Charlie).";
+            }
+if(!note) errors.yorum = "Yorum zorunlu.";
+
+            if(Object.keys(errors).length){
+              state.revErrors = errors;
+              render();
+
+              // focus first invalid control
+              if(errors.att){
+                // no focusable element; just scroll into view
+                document.querySelector('input[name="rev_att"]')?.scrollIntoView?.({block:"center"});
+              }else if(errors.hostel){
+                document.querySelector('input[name="rev_hostel"]')?.scrollIntoView?.({block:"center"});
+              }else if(errors.verim){ vEl?.focus(); }
+              else if(errors.ilgi){ iEl?.focus(); }
+              else if(errors.egitmen){ eEl?.focus(); }
+              else if(errors.yorum){ noteEl?.focus(); }
+
+              setToast("Eksik/Geçersiz alanlar var. Düzeltip tekrar Kaydet.", "warn");
+              return;
+            }
+          }else{
+            payload.verim = parseOptionalScore(v, vEl, "verim", l1);
+            payload.ilgi = parseOptionalScore(i, iEl, "ilgi", l2);
+            payload.egitmen = parseOptionalScore(e, eEl, "egitmen", l3);
+
+            if(Object.keys(errors).length){
+              state.revErrors = errors;
+              render();
+              if(errors.verim){ vEl?.focus(); }
+              else if(errors.ilgi){ iEl?.focus(); }
+              else if(errors.egitmen){ eEl?.focus(); }
+              setToast("Puanlar 1-5 arası tam sayı olmalı. Düzeltip tekrar Kaydet.", "warn");
+              return;
+            }
+          }
+
+          const hasAnyEval = isStrict ? true : (payload.verim!=="" || payload.ilgi!=="" || payload.egitmen!=="" || note!=="");
+
+          // project topic change (only Proje Uzmanı)
+          const tRow = (state.tables[state.sheetMap?.trainees || SHEETS.trainees]?.rows||[]).find(x=>String(x.StajyerID||"")===String(state.modal.tid))||{};
+          const oldProj = String(tRow.ProjeKonusu||"").trim();
+          const projChanged = (state.role==="PROJE_UZMANI") && (proj.trim()!==oldProj);
+
+          if(!hasAnyEval && !projChanged){
+            setToast("Boş işlem kaydedilemez.", "warn");
+            return;
+          }
+
+          state.reviewSaving = true;
+          render();
+
+          try{
+            // Update Proje Konusu first (if changed)
+            if(projChanged){
+              await updateTraineeField(state.modal.tid, "ProjeKonusu", proj.trim());
+              // Refresh trainee table in UI
+              await loadAllTables();
+            }
+
+            if(hasAnyEval){
+              await upsertMyEvaluation(state.modal.tid, { ...payload });
+              await loadAllTables();
+              updateEvalHistoryHost();
+
+              // Groq AI puanlama — arka planda, UI'yi bloklamaz
+              const _evalRow = myEvalForTraineeDate(state.modal.tid, selDate);
+              if(_evalRow && note){
+                groqBackgroundScore(
+                  state.modal.tid, note,
+                  payload.verim, payload.ilgi, payload.egitmen,
+                  _evalRow.__rowIndex
+                ).catch(()=>{});
+              }
+
+              // Auto advance only when an evaluation/comment is saved
+              const q=(state.q||"").toLowerCase();
+              const base = state.canSeeDashboard ? traineeRowsForActiveDonem() : traineesAssignedToCurrentUser();
+              const ids = base.filter(t=>{
+                if(!q) return true;
+                return String(t.AdıSoyadı||"").toLowerCase().includes(q) || String(t.StajyerID||"").toLowerCase().includes(q);
+              }).map(t=>String(t.StajyerID||""));
+
+              let next = null;
+              const cur = String(state.modal.tid||"");
+              if(ids.length){
+                const idx = Math.max(0, ids.indexOf(cur));
+                const rotated = ids.slice(idx+1).concat(ids.slice(0, idx+1));
+                next = rotated.find(id=>!isDone(id)) || rotated[0];
+                if(next===cur && ids.length===1) next = null;
+              }
+
+              state.reviewSaving = false;
+              state.toast = {msg:"Kaydedildi ✅", kind:"ok", ts:Date.now()};
+              setTimeout(()=>{ if(state.toast && Date.now()-state.toast.ts>2600){ state.toast=null; if(!state.modal) render(); }},2800);
+
+              if(next){
+                state.modal = {type:"review", tid: next};
+                render();
+              }else{
+                state.modal = null;
+                render();
+              }
+              return;
+            }
+
+            // Only Proje Konusu changed (no eval) → save & close for Proje Uzmanı
+            state.reviewSaving = false;
+            setToast("Kaydedildi ✅", "ok");
+            closeModal();
+            return;
+          }catch(err){
+            state.reviewSaving = false;
+            render();
+            throw err;
+          }
+        }
+      }catch(err){
+        console.error(err);
+        setToast(err.message||"İşlem hatası","error");
+      }
+    });
+  });
+
+
+  // topbar period multi-select
+  document.querySelectorAll("[data-donemcb]").forEach(cb=>{
+    const did = String(cb.dataset.did||"").trim();
+    cb.onchange = ()=>{
+      const all = allDonemIds();
+      let sel = getActiveDonemIds();
+
+      if(did==="__ALL__"){
+        sel = cb.checked ? all.slice() : [];
+      }else{
+        if(cb.checked){
+          if(!sel.includes(did)) sel = sel.concat([did]);
+        }else{
+          sel = sel.filter(x=>x!==did);
+        }
+      }
+
+      state.donemTouched = true;
+      setActiveDonemIds(sel);
+      render();
+    };
+  });
+
+  // binds
+  document.querySelectorAll("[data-bind]").forEach(inp=>{
+    const key=inp.dataset.bind;
+
+    inp.addEventListener("input", ()=>{
+      if(key==="q"){
+        state.q=inp.value;
+        if(_qDebounce) clearTimeout(_qDebounce);
+        _qDebounce = setTimeout(()=>{ render(); }, 80);
+        return;
+      }
+});
+
+    inp.addEventListener("change", ()=>{
+      if(key==="donem"){ setActiveDonemIds([inp.value]); render(); return; }
+      if(key==="review_date"){
+        const raw = String(inp.value||"").trim();
+        state.reviewDateRaw = raw;
+        if(!raw){
+          state.reviewDate = "";
+          localStorage.removeItem("review_date");
+          localStorage.removeItem("review_date_raw");
+          const hid = document.getElementById("reviewDateHidden");
+          if(hid) hid.value = "";
+          render();
+          return;
+        }
+        const iso = toIsoDate(raw);
+        if(!iso){
+          state.reviewDate = "";
+          localStorage.removeItem("review_date");
+          localStorage.setItem("review_date_raw", raw);
+          render();
+          return;
+        }
+        state.reviewDate = iso;
+        state.reviewDateRaw = iso;
+        inp.value = iso;
+        localStorage.setItem("review_date", iso);
+        localStorage.setItem("review_date_raw", iso);
+        const hid = document.getElementById("reviewDateHidden");
+        if(hid) hid.value = iso;
+        render();
+        return;
+      }
+    });
+  });
+
+    // hidden review date picker sync
+  const hidPicker = document.getElementById("reviewDateHidden");
+  if(hidPicker){
+    hidPicker.addEventListener("change", ()=>{
+      const v = String(hidPicker.value||"").trim();
+      state.reviewDate = v;
+      state.reviewDateRaw = v;
+      if(v){
+        localStorage.setItem("review_date", v);
+        localStorage.setItem("review_date_raw", v);
+      }else{
+        localStorage.removeItem("review_date");
+        localStorage.removeItem("review_date_raw");
+      }
+      const vis = document.querySelector('[data-bind="review_date"]');
+      if(vis) vis.value = v;
+      render();
+    });
+  }
+
+// drive list render
+  const driveHost=document.getElementById("driveListHost");
+  if(driveHost) renderDriveList(driveHost);
+
+  // overlay click close
+  const overlay=document.querySelector(".overlay");
+  if(overlay){
+    overlay.addEventListener("click",(e)=>{
+      if(e.target===overlay){ if(state.reviewSaving) return; closeModal(); }
+    });
+  }
+}
+
+/** init **/
+(async function(){
+  render();
+  // bootAfterLogin is triggered from initGsi() when GSI is ready (and token exists)
+})();
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initGsi()"></script>
+</body>
+</html>
