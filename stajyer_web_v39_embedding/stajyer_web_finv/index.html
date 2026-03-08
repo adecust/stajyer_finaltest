@@ -77,17 +77,6 @@ function fmtMetaParts(parts){
   return clean.join(" • ");
 }
 
-async function sheetsUpdateRange(a1Range, values2d){
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(a1Range)}?valueInputOption=USER_ENTERED`;
-  const body = { majorDimension: "ROWS", values: values2d };
-  return await gfetch(url, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
-}
-
-function fmtMetaParts(parts){
-  const clean = (parts||[]).map(s=>String(s||"").trim()).filter(Boolean);
-  return clean.join(" • ");
-}
-
 function toast(msg){
   try{
     const el = document.createElement("div");
@@ -2834,6 +2823,7 @@ function TraineeModal(){
             <div class="mt-3 grid grid-cols-1 gap-2 text-sm">
               ${infoRow("Email", t.MailAdresi)}
               ${infoRow("Telefon", t.TelefonNumarası)}
+              ${infoRow("Doğum Tarihi", t.DoğumTarihi)}
               ${infoRow("Şehir", t.İkametgahŞehri)}
               ${infoRow("Eğitim", t.EgitimDurumu)}
               ${infoRow("İngilizce", t.İngilizceSeviyesi)}
@@ -3467,7 +3457,11 @@ if(!note) errors.yorum = "Yorum zorunlu.";
       if(key==="q"){
         state.q=inp.value;
         if(_qDebounce) clearTimeout(_qDebounce);
-        _qDebounce = setTimeout(()=>{ render(); }, 80);
+        _qDebounce = setTimeout(()=>{
+          render();
+          const focused = document.querySelector('[data-bind="q"]');
+          if(focused){ focused.focus(); const len=focused.value.length; focused.setSelectionRange(len,len); }
+        }, 80);
         return;
       }
 });
