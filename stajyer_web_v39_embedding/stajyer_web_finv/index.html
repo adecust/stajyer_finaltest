@@ -121,8 +121,13 @@ const SHEETS = {
 
 function normKey(s){
   return String(s||"")
+    .replace(/[\u200B\u200C\u200D\u200E\u200F\u00AD\uFEFF\u2028\u2029]/g,"") // görünmez karakterleri temizle
     .toLowerCase()
+    // Türkçe karakterleri NFD'den ÖNCE dönüştür (tarayıcı uyumluluk güvencesi)
+    .replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ş/g,"s").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ç/g,"c")
+    // Kalan aksan/diakritik karakterleri NFD+diacritic yöntemiyle temizle
     .normalize("NFD").replace(/\p{Diacritic}/gu,"")
+    // NFD sonrası kalan Türkçe (double safety)
     .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c")
     .replace(/\s+/g," ").trim();
 }
@@ -1818,6 +1823,305 @@ function updateEvalHistoryHost(){
 /** =================== UPSERT (DEGERLENDIRMELER) =================== **/
 function colLetter(n){ let s=""; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26);} return s; }
 
+/** =================== FORM → STAJYERLEr SYNC (SUPERVISOR ONLY) =================== **/
+
+// Alan etiket tablosu — hem önizleme hem de ters-arama için
+const TRAINEE_FIELD_LABELS = {
+  MailAdresi:"E-posta", AdıSoyadı:"Ad Soyad", TelefonNumarası:"Telefon",
+  DoğumTarihi:"Doğum Tarihi", İngilizceSeviyesi:"İngilizce Seviyesi",
+  EgitimDurumu:"Eğitim Durumu", İkametgahŞehri:"İkametgah Şehri",
+  LinkedInProfili:"LinkedIn", CVLinki:"CV / Özgeçmiş",
+  ProfilFotoğrafıLinki:"Profil Fotoğrafı", BasvuruAlani:"Başvuru Alanı",
+  TanitimVideosuLinki:"Tanıtım Videosu", HostelAdi:"Hostel"
+};
+
+// Form sütun başlığını → Stajyerler alan adına çevirir (normKey tabanlı geniş kapsam)
+function mapFormHeaderToTrainee(rawHeader){
+  const k = normKey(rawHeader);
+  if(!k) return null;
+
+  // ── ERKEN BAŞVURU ALANI KONTROLÜ (normKey üzerinde) ──────────────────────
+  // Sadece "Hangi ... başvuru" sorusu: ^hangi ile başlamalı
+  // "Genel Başvuru Pozisyon Detayları" gibi genel açıklama sütunları yakalanmaz
+  if (/^hangi/.test(k) && /basvuru/.test(k)) return "BasvuruAlani";
+
+  // ── EXACT MATCH — bilinen form sütun isimleri (öncelikli) ─────────────────
+  const EXACT = {
+    "egitim durumu"                              : "EgitimDurumu",
+    "ikametgah sehri"                            : "İkametgahŞehri",
+    "linkedln"                                   : "LinkedInProfili",
+    "linkedin"                                   : "LinkedInProfili",
+    "oz gecmis"                                  : "CVLinki",
+    "ozgecmis"                                   : "CVLinki",
+    "profil fotografı"                           : "ProfilFotoğrafıLinki",
+    "profil fotografi"                           : "ProfilFotoğrafıLinki",
+    "hangi pozisyon icin basvuru yapiyorsunuz"   : "BasvuruAlani",
+    "hangi pozisyon icin basvuru yapiyorsunuz?"  : "BasvuruAlani",
+  };
+  if(EXACT[k]) return EXACT[k];
+  // Noktalama işaretlerini temizleyerek de dene
+  const kClean = k.replace(/[?!.,;:]+$/,"").trim();
+  if(EXACT[kClean]) return EXACT[kClean];
+
+  // ── ATLANACAKLAR ──────────────────────────────────────────────────────────
+  if(/^zaman[\s._-]?damga|^timestamp|^submission|gonderim[\s._-]?zaman|gonderi[ml][\s._-]?saat/.test(k)) return null;
+
+  // ── E-POSTA ───────────────────────────────────────────────────────────────
+  if(/e[\s._-]?posta|eposta|e[\s._-]?mail|^mail$|^email$|mail[\s._-]?adres|adres.*mail/.test(k)) return "MailAdresi";
+
+  // ── AD SOYAD ──────────────────────────────────────────────────────────────
+  if(/ad[\s._-]?soyad|soyad[\s._-]?ad|^isim|adiniz[\s._-]?soyadiniz|adinizi[\s._-]?soyadinizi|tam[\s._-]?ad|^name$|full[\s._-]?name/.test(k)) return "AdıSoyadı";
+
+  // ── TELEFON ───────────────────────────────────────────────────────────────
+  if(/telefon|phone|cep[\s._-]?no|gsm|numaraniz/.test(k)) return "TelefonNumarası";
+
+  // ── DOĞUM TARİHİ ──────────────────────────────────────────────────────────
+  if(/dogum[\s._-]?tarih|birth[\s._-]?date|^dogum$/.test(k)) return "DoğumTarihi";
+
+  // ── İNGİLİZCE SEVİYESİ ────────────────────────────────────────────────────
+  if(/ingilizce[\s._-]?(seviye|duzey|yetkinlik|puani|skoru)|^ingilizce$|english[\s._-]?(level|profic|skill)|^english$/.test(k)) return "İngilizceSeviyesi";
+
+  // ── EĞİTİM DURUMU ─────────────────────────────────────────────────────────
+  // "bilgi" ve "bilgileriniz" gibi genel ifadeler hariç — sadece "durum/seviye/öğrenim" gibi spesifik olanlar
+  if(/egitim[\s._-]?(durum|seviye)|ogrenim[\s._-]?durum|^egitim[\s._-]?durum|education[\s._-]?status|mezuniyet[\s._-]?durum/.test(k)) return "EgitimDurumu";
+
+  // ── İKAMETGAH ŞEHRİ ───────────────────────────────────────────────────────
+  if(/ikametgah|yasadig[\s._-]?(sehir|il)|ikamet[\s._-]?(sehir|il|yer)|bulundug[\s._-]?(sehir|il)|^sehir$|^il$|city|where[\s._-]?live|hangi[\s._-]?(sehir|il)[\s._-]?yasiyor/.test(k)) return "İkametgahŞehri";
+
+  // ── LİNKEDİN ──────────────────────────────────────────────────────────────
+  // "Linkedln" (büyük I → küçük l görünümü) ve "LinkedIn" her ikisini de yakala
+  // KVKK, onay, metin gibi bağlamlar hariç tutulur
+  if(/linked[il]n|linked\s?in/.test(k) && !/kvkk|onay|aydinlatma|acik[\s._-]?riza|sozlesme|metin|belge/.test(k)) return "LinkedInProfili";
+
+  // ── CV / ÖZGEÇMİŞ ─────────────────────────────────────────────────────────
+  // "özgeçmiş" → normKey → "ozgecmis"
+  if(/\bcv\b|oz[\s._-]?gecmis|ozgecmis|resume|cv[\s._-]?(link|url|adresi)|oz[\s._-]?gecmis[\s._-]?(link|url|adresi|paylasir)|ozgecmis[\s._-]?(link|url|adresi|paylasir|yukle|gonder)|lutfen.*cv|cv.*paylasir/.test(k)) return "CVLinki";
+
+  // ── PROFİL FOTOĞRAFI ──────────────────────────────────────────────────────
+  if(/profil[\s._-]?(foto|resim)|vesikalik|foto[\s._-]?(link|url)|profile[\s._-]?photo|fotograf[\s._-]?(link|url)/.test(k)) return "ProfilFotoğrafıLinki";
+
+  // ── BAŞVURU ALANI / POZİSYON ──────────────────────────────────────────────
+  // "^hangi + basvuru" zaten yukarıda yakalandı.
+  // "pozisyon + basvuru" genel eşleşmesi KALDIRILDI → "Genel Başvuru Pozisyon Detayları" gibi
+  // açıklama sütunlarını yanlışlıkla yakalamıyoruz.
+  // Sadece doğrudan "basvuru alani/departmani" gibi kısa alan adları:
+  if(/^basvuru[\s._-]?(alan|departman|pozisyon)|^staj[\s._-]?(alan|departman|pozisyon)|alan[\s._-]?basvur|applying[\s._-]?for|application[\s._-]?area/.test(k)) return "BasvuruAlani";
+
+  // ── TANITIM VİDEOSU ───────────────────────────────────────────────────────
+  if(/tanitim[\s._-]?video|video[\s._-]?(tanitim|link|url)|kendini[\s._-]?tanitim|intro[\s._-]?video/.test(k)) return "TanitimVideosuLinki";
+
+  // ── HOSTEL ────────────────────────────────────────────────────────────────
+  if(/hostel|konaklama[\s._-]?yer|kaldigi[\s._-]?yer/.test(k)) return "HostelAdi";
+
+  return null;
+}
+
+// Form Yanıtları sayfasını bulur, sütun eşlemesini hesaplar, önizleme modalını açar
+async function previewFormSync(){
+  if(state.role !== "SUPERVISOR" && state.role !== "ADMIN"){
+    setToast("Bu işlem yalnızca Süpervizör yetkisiyle yapılabilir.", "warn"); return;
+  }
+
+  setToast("Form sayfası taranıyor...", "ok");
+  const titles = state.sheetTitles || await sheetsGetMeta();
+  const formSheet = titles.find(t=>{
+    const n = normKey(t);
+    return n.includes("yanit") || n.includes("form yanit") || n.includes("yanitlar") || n.includes("form response");
+  });
+  if(!formSheet){
+    setToast("'Form Yanıtları' sayfası bulunamadı. Sayfa adında 'Yanıt' veya 'Yanıtlar' geçmeli.", "warn"); return;
+  }
+
+  let formValues;
+  try{
+    const res = await sheetsBatchGet([`${formSheet}!A1:ZZ`]);
+    formValues = ((res.valueRanges||[])[0]||{}).values || [[]];
+  }catch(e){ setToast("Form sayfası okunamadı: "+e.message, "error"); return; }
+  if(formValues.length < 2){ setToast("Form Yanıtları sayfası boş veya sadece başlık var.", "warn"); return; }
+
+  const formHeader = (formValues[0]||[]).map(h=>String(h||"").trim());
+  const rawFieldMap = formHeader.map(h=>mapFormHeaderToTrainee(h));
+
+  // Aynı Stajyerler alanına birden fazla sütun eşleşirse en kısa başlıklıyı seç
+  // (örn. "Eğitim Durumu" yerine "Eğitim Bilgileriniz Detaylar" gelirse kısayı tercih et)
+  const usedFields = new Map(); // targetField → {idx, len}
+  rawFieldMap.forEach((field, i)=>{
+    if(!field) return;
+    const len = normKey(formHeader[i]).length;
+    const prev = usedFields.get(field);
+    if(!prev || len < prev.len) usedFields.set(field, {idx:i, len});
+  });
+  const fieldMap = rawFieldMap.map((field, i)=>{
+    if(!field) return null;
+    return (usedFields.get(field)?.idx === i) ? field : null;
+  });
+
+  // Önizleme modalını aç — asıl sync buradan tetiklenecek
+  state.modal = { type:"formSyncPreview", formSheet, formValues, formHeader, fieldMap };
+  render();
+}
+
+// Asıl senkronizasyon — önizleme onaylandıktan sonra çalışır
+async function syncFormToTrainees(){
+  if(state.role !== "SUPERVISOR" && state.role !== "ADMIN"){
+    setToast("Bu işlem yalnızca Süpervizör yetkisiyle yapılabilir.", "warn"); return;
+  }
+  const { formSheet, formValues, formHeader, fieldMap } = state.modal || {};
+  if(!formValues || !fieldMap){ setToast("Önce önizleme yapınız.", "warn"); return; }
+
+  const emailIdx = fieldMap.indexOf("MailAdresi");
+  if(emailIdx < 0){ setToast("E-posta sütunu eşleşmedi — önizlemeyi tekrar kontrol edin.", "warn"); return; }
+
+  closeModal();
+  setToast("Aktarım başlıyor...", "ok");
+
+  const traineeSheet = state.sheetMap?.trainees || SHEETS.trainees;
+  const tbl = state.tables[traineeSheet];
+  if(!tbl){ setToast("Stajyerler tablosu yüklenemedi.", "error"); return; }
+  const traineeHeader = tbl.header;
+  const traineeRows   = tbl.rows;
+  const absStart = Number(tbl._colStart||0);
+  const startCol = colLetter(absStart + 1);
+  const endCol   = colLetter(absStart + traineeHeader.length);
+
+  // normKey boşluksuz karşılaştırma — "BasvuruAlani" == "Başvuru Alanı" == "basvuru alani"
+  const nkc = s => normKey(s).replace(/\s/g,"");
+
+  // Her canonical alan adı (ör. "BasvuruAlani") → Stajyerler'deki ham başlık (ör. "Başvuru Alanı")
+  // Bu sayede formData["BasvuruAlani"] → doğru sütunu bulur
+  const canonToRaw = {};
+  traineeHeader.forEach(h=>{
+    const hn = nkc(h);
+    // Canonical alan adlarıyla karşılaştır
+    for(const field of Object.keys(TRAINEE_FIELD_LABELS)){
+      if(nkc(field)===hn || nkc(TRAINEE_FIELD_LABELS[field])===hn){
+        canonToRaw[field] = h; break;
+      }
+    }
+    // Aynı normKey'e direkt düşen canonical (ör. header zaten "BasvuruAlani")
+    if(!canonToRaw[h]) canonToRaw[hn] = h;
+  });
+  // formData lookup: canonical veya normKey boşluksuz ile eşleş
+  const fdGet = (formData, rawH) => {
+    if(formData[rawH] !== undefined) return formData[rawH];
+    const rn = nkc(rawH);
+    for(const [k,v] of Object.entries(formData)){
+      if(nkc(k)===rn) return v;
+    }
+    // traineeHeader → canonical yoluyla bul
+    for(const [canon, raw] of Object.entries(canonToRaw)){
+      if(raw===rawH && formData[canon]!==undefined) return formData[canon];
+    }
+    return undefined;
+  };
+
+  let updated=0, added=0, skipped=0;
+  for(let r=1; r<formValues.length; r++){
+    const formRow = formValues[r]||[];
+    const email   = cleanEmail(formRow[emailIdx]||"");
+    if(!email){ skipped++; continue; }
+
+    // Form değerlerini canonical alan adıyla sakla
+    const formData = {};
+    fieldMap.forEach((field,i)=>{
+      if(!field) return;
+      const val = String(formRow[i]||"").trim();
+      if(val) formData[field] = val;
+    });
+
+    // Stajyerler'de eşleşen satırı bul
+    const existing = traineeRows.find(tr=>cleanEmail(tr.MailAdresi||"")===email);
+
+    if(existing){
+      let changed = false;
+      const rowArr = traineeHeader.map(h=>{
+        const cur = String(existing[h]||"").trim();
+        if(h==="StajyerID"||h==="GrupID") return cur;
+        const newVal = fdGet(formData, h);
+        if(!cur && newVal){ changed=true; return newVal; }
+        return cur;
+      });
+      if(changed){
+        const range = `${traineeSheet}!${startCol}${existing.__rowIndex}:${endCol}${existing.__rowIndex}`;
+        try{ await sheetsUpdate(range,[rowArr]); updated++; }catch(e){ console.warn("[sync] update err",e); }
+      } else { skipped++; }
+    } else {
+      const rowArr = traineeHeader.map(h=>{
+        if(h==="StajyerID"||h==="GrupID") return "";
+        return fdGet(formData, h)||"";
+      });
+      try{ await sheetsAppendRow(traineeSheet, rowArr, `${traineeSheet}!${startCol}:${endCol}`); added++; }
+      catch(e){ console.warn("[sync] append err",e); }
+    }
+  }
+
+  await loadAllTables();
+  render();
+  setToast(`Tamamlandı ✅ — ${updated} güncellendi · ${added} yeni eklendi · ${skipped} atlandı`, "ok");
+}
+
+// Önizleme modalı — her sütunun nasıl eşlendiğini gösterir, kullanıcı onaylar
+function FormSyncPreviewModal(){
+  const { formSheet, formValues, formHeader, fieldMap } = state.modal || {};
+  const dataRowCount = (formValues?.length||1) - 1;
+  const emailIdx = (fieldMap||[]).indexOf("MailAdresi");
+
+  const rows = (formHeader||[]).map((h,i)=>{
+    const mapped = fieldMap[i];
+    const label  = mapped ? (TRAINEE_FIELD_LABELS[mapped]||mapped) : null;
+    return { raw:h, mapped, label };
+  });
+
+  const mappedCount = rows.filter(r=>r.mapped).length;
+  const unmappedRows = rows.filter(r=>!r.mapped && r.raw);
+
+  return el(`
+    <div class="fixed inset-0 z-50 overlay flex items-center justify-center p-4">
+      <div class="glass rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-auto scrollbar fadeIn">
+        <div class="p-5 border-b border-slate-200/60">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-lg font-semibold">Form Verisi Aktarım Önizlemesi</div>
+              <div class="text-xs text-slate-500 mt-1">Kaynak: <b>${escapeHtml(formSheet||"")}</b> · <b>${dataRowCount}</b> satır · <b>${mappedCount}</b> sütun eşlendi</div>
+              ${emailIdx<0 ? `<div class="mt-1 text-xs text-rose-600 font-semibold">⚠️ E-posta sütunu tespit edilemedi — eşleşme e-posta olmadan yapılamaz.</div>` : `<div class="mt-1 text-xs text-emerald-600">✓ E-posta sütunu tespit edildi</div>`}
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button class="btn flex-1 px-4 py-3 rounded-2xl" data-action="closeModal">İptal</button>
+            <button class="btnPrimary flex-1 px-4 py-3 rounded-2xl" data-action="confirmFormSync">Onayla ve Aktar</button>
+          </div>
+        </div>
+        <div class="p-5">
+          <div class="text-sm font-semibold mb-3">Sütun Eşlemeleri</div>
+          <div class="space-y-1">
+            ${rows.map(r=>`
+              <div class="flex flex-col gap-1 px-3 py-2 rounded-2xl ${r.mapped ? 'bg-emerald-50/80 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}">
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 text-sm truncate">${escapeHtml(r.raw||"(boş)")}</div>
+                  <div class="text-slate-400 text-xs shrink-0">→</div>
+                  <div class="text-sm font-semibold shrink-0 ${r.mapped ? 'text-emerald-700' : 'text-slate-400'}">
+                    ${r.mapped ? escapeHtml(r.label||r.mapped) : '<span class="text-rose-400 italic text-xs">aktarılmayacak</span>'}
+                  </div>
+                </div>
+                ${!r.mapped ? `<div class="text-[10px] text-slate-400 font-mono break-all">normKey: "${escapeHtml(normKey(r.raw))}"</div>` : ''}
+              </div>
+            `).join("")}
+          </div>
+          ${unmappedRows.length ? `
+            <div class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl p-3">
+              <b>${unmappedRows.length} sütun</b> eşleşmedi ve aktarılmayacak. Yanlış eşleşme görürsen bildir.
+            </div>
+          ` : ``}
+          <div class="mt-4 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-2xl p-3">
+            <b>Kural:</b> Stajyerler tablosunda dolu alanlar <b>değiştirilmez</b>, yalnızca boş alanlar doldurulur.
+            Email eşleşmesi yoksa <b>yeni satır</b> eklenir (StajyerID ve GrupID boş kalır).
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
 async function updateTraineeField(tid, fieldName, newValue){
   const sheet = (state.sheetMap?.trainees || SHEETS.trainees);
   const t = state.tables?.[sheet];
@@ -2359,6 +2663,7 @@ const hr = hrOk ? latestHrForTrainee(tid) : null;
             </div>
             <input class="chip px-4 py-3 rounded-2xl outline-none w-full sm:w-72" data-bind="q" placeholder="Ara (isim/ID)" value="${escapeAttr(state.q||"")}"/>
             <button class="btn px-4 py-3 rounded-2xl" data-action="clearQ">Temizle</button>
+            ${(state.role==="SUPERVISOR"||state.role==="ADMIN") ? `<button class="btnPrimary px-4 py-3 rounded-2xl text-sm whitespace-nowrap" data-action="syncFormData" title="Form Yanıtları sayfasındaki verileri Stajyerler tablosuna aktar">Form Verilerini Aktar</button>` : ``}
           </div>
           <div class="mt-4">${grid.outerHTML}</div>
         </div>
@@ -3044,6 +3349,9 @@ function App(){
   if(state.modal?.type==="hr"){
     root.appendChild(HrModal());
   }
+  if(state.modal?.type==="formSyncPreview"){
+    root.appendChild(FormSyncPreviewModal());
+  }
 
   return root;
 }
@@ -3202,6 +3510,8 @@ function wire(){
         }
         if(act==="loadDriveList") return await loadDriveList();
         if(act==="clearQ"){ state.q=""; render(); return; }
+        if(act==="syncFormData"){ await previewFormSync(); return; }
+        if(act==="confirmFormSync"){ await syncFormToTrainees(); return; }
         if(act==="openTrainee"){ openTraineeModal(tid); return; }
         if(act==="openReview"){ openReviewModal(tid); return; }
         if(act==="openHR"){ openHrModal(tid); return; }
