@@ -66,7 +66,128 @@
 
 <script>
 
+/** =================== TEST MODE =================== **/
+let TEST_MODE = false;
+
+function _makeTestTable(header, dataRows){
+  const values = [header, ...dataRows];
+  const t = tableFromValues(values);
+  t._colStart = 0;
+  t._colEnd = header.length - 1;
+  return t;
+}
+
+function enterTestMode(){
+  TEST_MODE = true;
+  const DONEM_ID = "2026-Bahar";
+  const TODAY = "2026-03-10";
+
+  state.sheetMap = {
+    users: SHEETS.users, trainees: SHEETS.trainees, evals: SHEETS.evals,
+    periods: SHEETS.periods, groups: SHEETS.groups, calendar: SHEETS.calendar,
+    apps: SHEETS.apps, hr: SHEETS.hr,
+  };
+
+  state.tables = {
+    [SHEETS.users]: _makeTestTable(
+      ["Email","Rol","AdSoyad"],
+      [
+        ["admin@test.com","ADMIN","Test Admin"],
+        ["uzman1@test.com","UZMAN","Ali Uzman"],
+        ["uzman2@test.com","UZMAN","Ayşe Uzman"],
+        ["proje@test.com","PROJE_UZMANI","Proje Uzman"],
+        ["ik@test.com","IK","İK Sorumlu"],
+        ["hostel@test.com","HOSTEL_UZMANI","Hostel Uzman"],
+      ]
+    ),
+    [SHEETS.groups]: _makeTestTable(
+      ["GrupID","GrupAdi","SorumluUzman","DonemID"],
+      [
+        ["GRP-01","Hukuk Grubu","uzman1@test.com",DONEM_ID],
+        ["GRP-02","Teknoloji Grubu","uzman2@test.com",DONEM_ID],
+      ]
+    ),
+    [SHEETS.trainees]: _makeTestTable(
+      ["StajyerID","GrupID","AdıSoyadı","MailAdresi","TelefonNumarası","DoğumTarihi","İngilizceSeviyesi","EgitimDurumu","İkametgahŞehri","LinkedInProfili","CVLinki","ProfilFotoğrafıLinki","Durum","ProjeKonusu","HostelAdi","BasvuruAlani","DonemID","SorumluUzman"],
+      [
+        ["STJ-001","GRP-01","Ahmet Yılmaz","ahmet@test.com","5551234567","2002-05-10","B2","Lisans","Ankara","","","","Aktif","KVKK Uyum Projesi","","Hukuk",DONEM_ID,"uzman1@test.com"],
+        ["STJ-002","GRP-02","Zeynep Kaya","zeynep@test.com","5559876543","2001-11-22","C1","Lisans","İstanbul","","","","Aktif","Web Uygulama Geliştirme","San Art","Teknoloji",DONEM_ID,"uzman2@test.com"],
+        ["STJ-003","GRP-01","Mehmet Demir","mehmet@test.com","5553334444","2003-03-15","A2","Lisans","Ankara","","","","Aktif","Sözleşme Analizi","","Hukuk",DONEM_ID,"uzman1@test.com"],
+        ["STJ-004","GRP-01","Elif Şahin","elif@test.com","5555678901","2002-07-30","B1","Lisans","İstanbul","","","","Aktif","Ticaret Hukuku","Charlie","Hukuk",DONEM_ID,"uzman1@test.com"],
+        ["STJ-005","GRP-02","Can Arslan","can@test.com","5551112222","2001-09-05","A1","Lisans","Ankara","","","","Aktif","Dijital Dönüşüm","","Teknoloji",DONEM_ID,"uzman2@test.com"],
+        ["STJ-006","GRP-02","Selin Çelik","selin@test.com","5554445555","2003-01-18","B2","Lisans","Ankara","","","","Aktif","İK Süreçleri","San Art","İK",DONEM_ID,"uzman2@test.com"],
+        ["STJ-007","GRP-01","Emre Yıldız","emre@test.com","5556667777","2002-12-25","C1","Lisans","Ankara","","","","Aktif","Şirket Hukuku","","Hukuk",DONEM_ID,"uzman1@test.com"],
+        ["STJ-008","GRP-02","Fatma Öztürk","fatma@test.com","5558889999","2001-06-14","B1","Lisans","İstanbul","","","","Aktif","Proje Yönetimi","Charlie","Teknoloji",DONEM_ID,"uzman2@test.com"],
+        ["STJ-009","GRP-01","Burak Aydın","burak@test.com","5552223333","2002-02-28","A2","Lisans","İstanbul","","","","Aktif","İş Hukuku Analizi","","Hukuk",DONEM_ID,"uzman1@test.com"],
+        ["STJ-010","GRP-02","Deniz Koç","deniz@test.com","5557778888","2003-08-11","B2","Lisans","İzmir","","","","Aktif","Dijital Pazarlama","","Teknoloji",DONEM_ID,"uzman2@test.com"],
+      ]
+    ),
+    [SHEETS.evals]: _makeTestTable(
+      ["StajyerID","DegerlendirenUzman","DegerlendirmeTipi","Tarih","KatilimDurumu","Kriter1_Baslik","Kriter1_Puan","Kriter2_Baslik","Kriter2_Puan","Kriter3_Baslik","Kriter3_Puan","GenelNotlar","EvalID","TarihKey","DonemID","AI_Puan"],
+      [
+        ["STJ-001","uzman1@test.com","UZMAN","2026-03-03","Katıldı","Verim","4","İlgi","5","Eğitmen","4","Stajyer KVKK konusunda başarılı ilerliyor, sorumluluklarını zamanında yerine getiriyor.","STJ-001|uzman1|2026-Bahar|2026-03-03","2026-Bahar|STJ-001|2026-03-03",DONEM_ID,"4"],
+        ["STJ-002","uzman2@test.com","UZMAN","2026-03-03","Katıldı","Verim","3","İlgi","4","Eğitmen","3","Web geliştirme projesi orta düzeyde ilerliyor, teknik bilgi geliştirilmeli.","STJ-002|uzman2|2026-Bahar|2026-03-03","2026-Bahar|STJ-002|2026-03-03",DONEM_ID,"3"],
+        ["STJ-003","uzman1@test.com","UZMAN","2026-03-03","Katıldı","Verim","5","İlgi","5","Eğitmen","5","Mükemmel performans, analitik düşüncesi ve sorumluluk bilinci çok güçlü.","STJ-003|uzman1|2026-Bahar|2026-03-03","2026-Bahar|STJ-003|2026-03-03",DONEM_ID,"5"],
+        ["STJ-004","uzman1@test.com","UZMAN","2026-03-03","Katılmadı","Verim","","İlgi","","Eğitmen","","Stajyer izinli olduğundan değerlendirme yapılamamıştır.","STJ-004|uzman1|2026-Bahar|2026-03-03","2026-Bahar|STJ-004|2026-03-03",DONEM_ID,""],
+        ["STJ-005","uzman2@test.com","UZMAN","2026-03-03","Katıldı","Verim","4","İlgi","3","Eğitmen","4","Dijital dönüşüm konusunda ilgili, ancak zaman yönetimi geliştirilebilir.","STJ-005|uzman2|2026-Bahar|2026-03-03","2026-Bahar|STJ-005|2026-03-03",DONEM_ID,"4"],
+        ["STJ-001","uzman1@test.com","UZMAN","2026-03-05","Katıldı","Verim","5","İlgi","4","Eğitmen","5","İkinci hafta değerlendirmesi olumlu, özgüven artışı dikkat çekici.","STJ-001|uzman1|2026-Bahar|2026-03-05","2026-Bahar|STJ-001|2026-03-05",DONEM_ID,"5"],
+        ["STJ-002","uzman2@test.com","UZMAN","2026-03-05","Katıldı","Verim","4","İlgi","4","Eğitmen","4","API entegrasyonunda ilerleme kaydetti, iletişimi güçlü.","STJ-002|uzman2|2026-Bahar|2026-03-05","2026-Bahar|STJ-002|2026-03-05",DONEM_ID,"4"],
+        ["STJ-006","uzman2@test.com","UZMAN","2026-03-03","Katıldı","Verim","3","İlgi","5","Eğitmen","3","İK süreçlerine ilgisi yüksek fakat pratik beceriler geliştirilmeli.","STJ-006|uzman2|2026-Bahar|2026-03-03","2026-Bahar|STJ-006|2026-03-03",DONEM_ID,"4"],
+      ]
+    ),
+    [SHEETS.periods]: _makeTestTable(
+      ["DonemID","DonemAdi","BaslangicTarihi","BitisTarihi","Aktif"],
+      [
+        [DONEM_ID,"2026 Bahar Dönemi","2026-02-17","2026-05-30","Evet"],
+        ["2025-Guz","2025 Güz Dönemi","2025-09-15","2026-01-31","Hayır"],
+      ]
+    ),
+    [SHEETS.calendar]: _makeTestTable(
+      ["Tarih","DonemID","GunNo","GunTuru","Aciklama","YorumIzinliRoller"],
+      [
+        ["2026-03-03",DONEM_ID,"1","Normal","","ADMIN,SUPERVISOR,UZMAN,PROJE_UZMANI,HOSTEL_UZMANI"],
+        ["2026-03-05",DONEM_ID,"2","Normal","","ADMIN,SUPERVISOR,UZMAN,PROJE_UZMANI,HOSTEL_UZMANI"],
+        ["2026-03-10",DONEM_ID,"3","Normal","","ADMIN,SUPERVISOR,UZMAN,PROJE_UZMANI,HOSTEL_UZMANI"],
+        ["2026-03-12",DONEM_ID,"4","Normal","","ADMIN,SUPERVISOR,UZMAN,PROJE_UZMANI,HOSTEL_UZMANI"],
+        ["2026-03-17",DONEM_ID,"5","Normal","","ADMIN,SUPERVISOR,UZMAN,PROJE_UZMANI,HOSTEL_UZMANI"],
+      ]
+    ),
+    [SHEETS.hr]: _makeTestTable(
+      ["Tarih","DonemID","StajyerID","AdıSoyadı","Departman","IseGirisDurumu","EkleyenEmail","EkleyenAd","Rol"],
+      [
+        ["2026-02-18",DONEM_ID,"STJ-001","Ahmet Yılmaz","Hukuk","Onaylandı","ik@test.com","İK Sorumlu","IK"],
+        ["2026-02-18",DONEM_ID,"STJ-002","Zeynep Kaya","Teknoloji","Onaylandı","ik@test.com","İK Sorumlu","IK"],
+        ["2026-02-19",DONEM_ID,"STJ-003","Mehmet Demir","Hukuk","Beklemede","ik@test.com","İK Sorumlu","IK"],
+      ]
+    ),
+    [SHEETS.apps]: _makeTestTable(["BasvuruID","MailAdresi","AdıSoyadı","BaşvurduğuPozisyon","CVLinki","BasvuruTarihi","FormYanitID"],[]),
+  };
+  state.sheetTitles = Object.values(SHEETS);
+
+  state.token = "__TEST_MODE__";
+  state.user = { email: "admin@test.com", name: "Test Admin" };
+  state.spreadsheetId = "__TEST__";
+  state.datasetName = "Test Verisi (Demo)";
+
+  applyRole("ADMIN", "Test Admin");
+  state.donemTouched = true;
+  setActiveDonemIds([DONEM_ID]);
+
+  state.reviewDate = TODAY;
+  state.reviewDateRaw = TODAY;
+  localStorage.setItem("review_date", TODAY);
+  localStorage.setItem("review_date_raw", TODAY);
+
+  routeTo("#dashboard");
+  setToast("🧪 TEST MODU — veriler kayıt edilmez, sadece görüntülenir", "warn");
+}
+
 async function sheetsUpdateRange(a1Range, values2d){
+  if(TEST_MODE){
+    console.log("[TEST] sheetsUpdateRange skipped:", a1Range, values2d);
+    setToast("TEST MODU: yazma işlemi simüle edildi (gerçek kayıt yok)", "warn");
+    return { updatedCells: 0 };
+  }
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(a1Range)}?valueInputOption=USER_ENTERED`;
   const body = { majorDimension: "ROWS", values: values2d };
   return await gfetch(url, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
@@ -526,6 +647,15 @@ function selectDataset(file){
 
 /** =================== SHEETS IO =================== **/
 async function sheetsBatchGet(ranges){
+  if(TEST_MODE){
+    // Return current in-memory table values so refreshes work without API calls
+    const valueRanges = ranges.map(range => {
+      const sheetName = range.split("!")[0];
+      const t = state.tables?.[sheetName];
+      return { values: t ? t.values : [[]] };
+    });
+    return { valueRanges };
+  }
   if(!state.spreadsheetId){ localStorage.removeItem("active_dataset"); routeTo("#select"); throw new Error("Spreadsheet seçilmedi."); }
   const params = ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join("&");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${state.spreadsheetId}/values:batchGet?majorDimension=ROWS&${params}`;
@@ -549,6 +679,10 @@ async function detectEvalsPadA(){
 }
 
 async function sheetsAppendRow(sheetName, rowArray, rangeOverride=null){
+  if(TEST_MODE){
+    console.log("[TEST] sheetsAppendRow skipped:", sheetName, rowArray);
+    return {};
+  }
   // Appends a row safely in the intended table range.
   const range = rangeOverride || `${sheetName}!A:ZZ`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.spreadsheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -2569,6 +2703,7 @@ function AuthLanding(){
         <h1 class="text-2xl font-semibold mt-4">Stajyer Değerlendirme Paneli</h1>
         <p class="text-slate-600 mt-2">Google ile giriş yap → Drive’daki dönem dosyasını seç → rolüne göre ekran açılır.</p>
         <button class="btnPrimary mt-6 px-5 py-3 rounded-2xl" data-action="login">Google ile Giriş</button>
+        <button class="btn mt-3 px-5 py-3 rounded-2xl text-sm text-slate-600 border border-dashed border-slate-300" data-action="enterTestMode">🧪 Test Modunda Aç (Sahte Veri)</button>
         <div class="text-xs text-slate-500 mt-4">
           OAuth ayarında Authorized JavaScript origins: <b>http://localhost:8000</b>
         </div>
@@ -3502,7 +3637,9 @@ function wire(){
       const tid = btn.dataset.tid || btn.getAttribute("data-tid") || "";
       try{
         if(act==="login") return login();
-        if(act==="logout") return logout();
+        if(act==="enterTestMode") return enterTestMode();
+        if(act==="logout"){ TEST_MODE=false; return logout(); }
+        if(act==="openReviewDatePicker"){ document.getElementById("reviewDateHidden")?.showPicker?.(); return; }
         if(act==="changeDataset"){
           localStorage.removeItem("active_dataset");
           state.spreadsheetId=null; state.datasetName=null; state.tables={}; state.sheetMap=null;
