@@ -104,7 +104,7 @@ const SCOPES = [
 const SCOPES_STR = SCOPES.join(" ");
 
 /** =================== GROQ CONFIG =================== **/
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const GROQ_MODEL   = "llama-3.3-70b-versatile";
 
 /** Sheet structure (YOUR EXCEL) */
@@ -560,47 +560,31 @@ async function sheetsAppendRow(sheetName, rowArray, rangeOverride=null){
 
 async function refreshEvals(){
   const sheet = (state.sheetMap?.evals || SHEETS.evals);
-  // Read the main range + a small header probe range. The probe lets us detect leading empty columns reliably.
-  const ranges = [`${sheet}!A1:ZZ`, `${sheet}!A1:Z1`];
-  const res = await sheetsBatchGet(ranges);
+  const res = await sheetsBatchGet([`${sheet}!A1:ZZ`]);
 
   const vrMain = (res.valueRanges||[])[0] || {};
   let valuesRaw = vrMain.values || [[]];
+  if(valuesRaw[0]) valuesRaw[0] = valuesRaw[0].map(h=>String(h||"").trim());
 
-  const vrProbe = (res.valueRanges||[])[1] || {};
-  const probeRow = ((vrProbe.values||[[]])[0]||[]).map(h=>String(h||"").trim());
-  const probeIdx = probeRow.findIndex(v=>canonicalHeader(v)==="StajyerID");
+  const trimmed = trimValuesToKnown(valuesRaw, "evals");
 
-  // If the API omitted leading empty columns in the main response, pad them back based on probeIdx.
-  if(probeIdx>0){
-    const mainFirst = String(((valuesRaw[0]||[])[0]||"")).trim();
-    if(canonicalHeader(mainFirst)==="StajyerID"){
-      valuesRaw = (valuesRaw||[[]]).map(r=>{
-        r = r || [];
-        const padded = Array(probeIdx).fill("");
-        return padded.concat(r);
-      });
-    }
+  // Cap the evals table to exactly 16 columns (A–P) from the detected start.
+  // Old duplicate/stray headers beyond column P (e.g. from previous misplaced writes)
+  // would otherwise cause field values to be silently overwritten with empty strings.
+  const EVALS_WIDTH = 16;
+  const capEnd = trimmed.start + EVALS_WIDTH - 1;
+  if(trimmed.end > capEnd){
+    trimmed.end = capEnd;
+    trimmed.width = EVALS_WIDTH;
+    trimmed.sliced = trimmed.sliced.map(r => {
+      while(r.length < EVALS_WIDTH) r.push("");
+      return r.slice(0, EVALS_WIDTH);
+    });
   }
 
-  // Detect the correct header block (prevents writing into a duplicated/stray block on the right)
-  const headerRow = (valuesRaw[0]||[]).map(h=>String(h||"").trim());
-  const span = detectHeaderSpan(headerRow, "evals");
-  const start = Number(span.start||0);
-  const end = Number(span.end||0);
-  const width = Math.max(0, end - start + 1);
-
-  const sliced = (valuesRaw||[[]]).map(r=>{
-    r = r || [];
-    while(r.length < end+1) r.push("");
-    const seg = r.slice(start, end+1);
-    while(seg.length < width) seg.push("");
-    return seg;
-  });
-
-  const t = tableFromValues(sliced);
-  t._colStart = start;
-  t._colEnd = end;
+  const t = tableFromValues(trimmed.sliced);
+  t._colStart = trimmed.start;
+  t._colEnd = trimmed.end;
   state.tables = state.tables || {};
   state.tables[sheet] = t;
 }
@@ -734,6 +718,14 @@ hr: pick(SHEETS.hr, ["IseGiris","İşeGiriş","İşe Giriş","ISEGIRIS","HR","Is
       trimmed = { sliced: valuesRaw, start: 0, end: Math.max(0, headerRow.length-1), width: headerRow.length };
     }else{
       trimmed = trimValuesToKnown(valuesRaw, m.kind||"");
+      // Cap evals table to exactly 16 columns to prevent stray/duplicate headers from corrupting field mapping
+      if((m.kind||"")==="evals"){
+        const _capEnd = trimmed.start + 15;
+        if(trimmed.end > _capEnd){
+          trimmed.end = _capEnd; trimmed.width = 16;
+          trimmed.sliced = trimmed.sliced.map(r=>{ while(r.length<16)r.push(""); return r.slice(0,16); });
+        }
+      }
     }
     const t = tableFromValues(trimmed.sliced);
     t._colStart = trimmed.start;
@@ -2196,26 +2188,35 @@ async function upsertMyEvaluation(tid, payload){
   const existing = (keyDate? myEvalForDate(tid, keyDate) : null);
   const rowIndex = existing && Number(existing.__rowIndex);
 
-  // Align to sheet header columns (map payload to the visible table header)
-const header = t.header.map(h=>String(h||"").trim());
-const rowArray = header.map(h=>{
-  const canon = canonicalHeader(h);
-  const v = (row[canon]!==undefined) ? row[canon] : (row[h]!==undefined ? row[h] : "");
-  return v===undefined ? "" : v;
-});
+  // Use a fixed canonical column order and always write to column A.
+  // This avoids any dependency on detected _colStart offsets or duplicate/stray headers.
+  const EVALS_COLS = ["StajyerID","DegerlendirenUzman","DegerlendirmeTipi","Tarih","KatilimDurumu",
+    "Kriter1_Baslik","Kriter1_Puan","Kriter2_Baslik","Kriter2_Puan","Kriter3_Baslik","Kriter3_Puan",
+    "GenelNotlar","EvalID","TarihKey","DonemID","AI_Puan"];
+  const rowArray = EVALS_COLS.map(canon => { const v = row[canon]; return v !== undefined ? v : ""; });
+  const startCol = "A";
+  const endCol = colLetter(EVALS_COLS.length); // "P"
 
-// Table might start after empty columns (e.g., header begins at B/T/etc.). We detect and write from that column.
-const absStart = Number(t._colStart||0);
-const startCol = colLetter(absStart+1);
-const endCol = colLetter(absStart + header.length);
+  // If header row is not at column A, write it there first (one-time normalization).
+  const absStart = Number(t._colStart||0);
+  if(absStart > 0){
+    await sheetsUpdateRange(`${sheet}!A1:${endCol}1`, [EVALS_COLS]);
+    t._colStart = 0;
+  }
 
 if(rowIndex && rowIndex>=2){
-  // Update existing row (do not touch header)
-  const range = `${sheet}!${startCol}${rowIndex}:${endCol}${rowIndex}`;
+  // Update existing row
+  const range = `${sheet}!A${rowIndex}:P${rowIndex}`;
   await sheetsUpdateRange(range, [rowArray]);
 } else {
-  // Append new row safely within the table range
-  await sheetsAppendRow(sheet, rowArray, `${sheet}!${startCol}:${endCol}`);
+  // Write directly to next empty row — avoids append API's automatic offset behavior
+  // Count all rows in the raw values to find the true last row, including bad/offset rows
+  const rawVals = (await sheetsBatchGet([`${sheet}!A1:ZZ`]));
+  const allRows = (rawVals?.valueRanges?.[0]?.values || []);
+  const nextRow = allRows.length + 1;
+  const writeRange = `${sheet}!A${nextRow}:P${nextRow}`;
+  console.log("[EVAL WRITE] DIRECT to row", nextRow, "→", writeRange);
+  await sheetsUpdateRange(writeRange, [rowArray]);
 }
 
 // Refresh evals so UI updates (green/red and history)
@@ -2258,7 +2259,8 @@ Puan (1-5 arası tam sayı):`;
 }
 
 async function groqBackgroundScore(tid, note, v, i, e, rowIndex){
-  if(!GROQ_API_KEY || !note || !rowIndex) return;
+  console.log("[Groq] groqBackgroundScore called — rowIndex=", rowIndex, "note=", note?.slice?.(0,30), "GROQ_API_KEY set=", !!GROQ_API_KEY);
+  if(!GROQ_API_KEY || !note || !rowIndex) { console.warn("[Groq] Early exit — GROQ_API_KEY:", !!GROQ_API_KEY, "note:", !!note, "rowIndex:", rowIndex); return; }
   try{
     const score = await callGroqScore(note, v, i, e);
     if(score === null){ console.warn("[Groq] Groq skor döndürmedi."); return; }
@@ -3678,12 +3680,16 @@ if(!note) errors.yorum = "Yorum zorunlu.";
 
               // Groq AI puanlama — arka planda, UI'yi bloklamaz
               const _evalRow = myEvalForTraineeDate(state.modal.tid, selDate);
+              console.log("[Groq DEBUG] _evalRow=", _evalRow, "note=", note, "selDate=", selDate);
               if(_evalRow && note){
+                console.log("[Groq DEBUG] Calling groqBackgroundScore with rowIndex=", _evalRow.__rowIndex);
                 groqBackgroundScore(
                   state.modal.tid, note,
                   payload.verim, payload.ilgi, payload.egitmen,
                   _evalRow.__rowIndex
-                ).catch(()=>{});
+                ).catch((err)=>{ console.warn("[Groq DEBUG] groqBackgroundScore threw:", err); });
+              } else {
+                console.warn("[Groq DEBUG] Skipped — _evalRow:", !!_evalRow, "note:", !!note);
               }
 
               // Auto advance only when an evaluation/comment is saved
